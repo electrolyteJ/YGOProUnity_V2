@@ -9,6 +9,7 @@ namespace YGOSharp
         public int Id;
         public int Ot;
         public int Alias;
+        public int RuleCode;
         public ulong Setcode;
         public int Type;
 
@@ -43,6 +44,7 @@ namespace YGOSharp
             r.Id = Id;
             r.Ot = Ot;
             r.Alias = Alias;
+            r.RuleCode = RuleCode;
             r.Setcode = Setcode;
             r.Type = Type;
             r.Level = Level;
@@ -71,6 +73,7 @@ namespace YGOSharp
             r.Id = Id;
             r.Ot = Ot;
             r.Alias = Alias;
+            r.RuleCode = RuleCode;
             r.Setcode = Setcode;
             r.Type = Type;
             r.Level = Level;
@@ -137,6 +140,13 @@ namespace YGOSharp
             for (int ii = 0; ii < 0x10; ii++)
             {
                 this.Str[ii] = reader.GetString(14 + ii);
+            }
+            // temp
+            // this.RuleCode = this.Alias;
+            if (this.Id == 6218705)
+            {
+                this.RuleCode = 13331639;
+                this.Alias = 13331639;
             }
         }
 

@@ -216,6 +216,7 @@ namespace Percy
         public int LScale;
         public int RScale;
         public int LinkMarker;
+        public int RuleCode;
     }
     public struct ScriptData
     {

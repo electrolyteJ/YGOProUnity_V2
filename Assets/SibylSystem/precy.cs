@@ -127,6 +127,7 @@ public class PrecyOcg
         retuvalue.Setcode = card.Setcode;
         retuvalue.Type = card.Type;
         retuvalue.LinkMarker = card.LinkMarker;
+        retuvalue.RuleCode = card.RuleCode;
         return retuvalue;
     }
 
