@@ -59,3 +59,7 @@ AI_core_vs2017solution/.vs
 commamd.shell
 /Windbot
 /AI.Server.exe
+Logs
+UserSettings/
+.DS_Store
+.idea/
