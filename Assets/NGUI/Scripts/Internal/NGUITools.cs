@@ -54,8 +54,7 @@ static public class NGUITools
 	{
 		get
 		{
-			return Application.platform != RuntimePlatform.WindowsWebPlayer &&
-				Application.platform != RuntimePlatform.OSXWebPlayer;
+			return Application.platform != RuntimePlatform.WebGLPlayer;
 		}
 	}
 
@@ -191,7 +190,7 @@ static public class NGUITools
 		while (obj.transform.parent != null)
 		{
 			obj = obj.transform.parent.gameObject;
-			path = obj.name + "\\" + path;
+			path = obj.name + "/" + path;
 		}
 		return path;
 	}

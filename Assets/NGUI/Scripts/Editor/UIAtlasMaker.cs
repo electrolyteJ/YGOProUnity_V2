@@ -941,9 +941,6 @@ public class UIAtlasMaker : EditorWindow
 						mat = AssetDatabase.LoadAssetAtPath(matPath, typeof(Material)) as Material;
 					}
 
-					// Create a new prefab for the atlas
-					Object prefab = (go != null) ? go : PrefabUtility.CreateEmptyPrefab(path);
-
 					// Create a new game object for the atlas
 					string atlasName = path.Replace(".prefab", "");
 					atlasName = atlasName.Substring(path.LastIndexOfAny(new char[] { '/', '\\' }) + 1);
@@ -951,7 +948,7 @@ public class UIAtlasMaker : EditorWindow
 					go.AddComponent<UIAtlas>().spriteMaterial = mat;
 
 					// Update the prefab
-					PrefabUtility.ReplacePrefab(go, prefab);
+					NGUIPrefabUtilityCompat.SaveAsPrefabAsset(go, path);
 					DestroyImmediate(go);
 					AssetDatabase.SaveAssets();
 					AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);

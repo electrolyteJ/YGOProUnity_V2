@@ -396,21 +396,19 @@ public class UIFontMaker : EditorWindow
 
 		// Load the font's prefab
 		GameObject go = AssetDatabase.LoadAssetAtPath(prefabPath, typeof(GameObject)) as GameObject;
-		Object prefab = null;
+		bool createNewPrefab = false;
 		string fontName;
 
 		// Font doesn't exist yet
 		if (go == null || go.GetComponent<UIFont>() == null)
 		{
-			// Create a new prefab for the atlas
-			prefab = PrefabUtility.CreateEmptyPrefab(prefabPath);
-
 			fontName = prefabPath.Replace(".prefab", "");
 			fontName = fontName.Substring(prefabPath.LastIndexOfAny(new char[] { '/', '\\' }) + 1);
 
 			// Create a new game object for the font
 			go = new GameObject(fontName);
 			uiFont = go.AddComponent<UIFont>();
+			createNewPrefab = true;
 		}
 		else
 		{
@@ -540,10 +538,10 @@ public class UIFontMaker : EditorWindow
 			else return;
 		}
 
-		if (prefab != null)
+		if (createNewPrefab)
 		{
 			// Update the prefab
-			PrefabUtility.ReplacePrefab(go, prefab);
+			NGUIPrefabUtilityCompat.SaveAsPrefabAsset(go, prefabPath);
 			DestroyImmediate(go);
 			AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 

@@ -416,9 +416,7 @@ public static class NGUIEditorTools
 		if (root.transform != null)
 		{
 			// Check if the selected object is a prefab instance and display a warning
-			PrefabType type = PrefabUtility.GetPrefabType(root);
-
-			if (type == PrefabType.PrefabInstance)
+			if (NGUIPrefabUtilityCompat.IsPrefabInstance(root))
 			{
 				return EditorUtility.DisplayDialog("Losing prefab",
 					"This action will lose the prefab connection. Are you sure you wish to continue?",

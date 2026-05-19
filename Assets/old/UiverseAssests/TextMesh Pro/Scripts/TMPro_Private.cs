@@ -607,7 +607,7 @@ namespace TMPro
 
 
             // Check if event applies to this current object
-            if (obj == gameObject || UnityEditor.PrefabUtility.GetPrefabParent(gameObject) == obj)
+            if (obj == gameObject || UnityEditor.PrefabUtility.GetCorrespondingObjectFromSource(gameObject) == obj)
             {
                 //Debug.Log("Assigning new Base Material " + newMaterial.name + " to replace " + currentMaterial.name);
                 

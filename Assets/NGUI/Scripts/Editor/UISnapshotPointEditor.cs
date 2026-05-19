@@ -83,10 +83,10 @@ public class UISnapshotPointEditor : Editor
 
 		// Root object of this prefab instance
 		Transform t = point.transform.parent;
-		GameObject go = PrefabUtility.FindPrefabRoot(t == null ? point.gameObject : t.gameObject);
+		GameObject go = NGUIPrefabUtilityCompat.GetOutermostPrefabInstanceRoot(t == null ? point.gameObject : t.gameObject);
 		if (go == null) return null;
 
 		// Actual prefab
-		return PrefabUtility.GetPrefabParent(go) as GameObject;
+		return NGUIPrefabUtilityCompat.GetPrefabAsset(go);
 	}
 }

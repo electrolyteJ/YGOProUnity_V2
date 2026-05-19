@@ -896,7 +896,7 @@ public class UIWidgetInspector : UIRectEditor
 			GUILayout.Space(3f);
 		}
 
-		PrefabType type = PrefabUtility.GetPrefabType(w.gameObject);
+		bool isPrefabAsset = NGUIPrefabUtilityCompat.IsPrefabAsset(w.gameObject);
 
 		if (NGUIEditorTools.DrawHeader("Widget"))
 		{
@@ -904,8 +904,8 @@ public class UIWidgetInspector : UIRectEditor
 			if (NGUISettings.minimalisticLook) NGUIEditorTools.SetLabelWidth(70f);
 
 			DrawPivot(so, w);
-			DrawDepth(so, w, type == PrefabType.Prefab);
-			DrawDimensions(so, w, type == PrefabType.Prefab);
+			DrawDepth(so, w, isPrefabAsset);
+			DrawDimensions(so, w, isPrefabAsset);
 			if (NGUISettings.minimalisticLook) NGUIEditorTools.SetLabelWidth(70f);
 
 			SerializedProperty ratio = so.FindProperty("aspectRatio");

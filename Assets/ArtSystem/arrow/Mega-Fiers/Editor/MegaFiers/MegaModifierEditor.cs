@@ -206,15 +206,15 @@ public class MegaModifierEditor : Editor
 					col = Color.blue;
 					col.a = a;
 					Handles.color = col;
-					Handles.ArrowCap(0, pos, rot * Quaternion.Euler(180.0f, 0.0f, 0.0f), mod.GizmoSize());
+					Handles.ArrowHandleCap(0, pos, rot * Quaternion.Euler(180.0f, 0.0f, 0.0f), mod.GizmoSize(), EventType.Repaint);
 					col = Color.green;
 					col.a = a;
 					Handles.color = col;
-					Handles.ArrowCap(0, pos, rot * Quaternion.Euler(90.0f, 0.0f, 0.0f), mod.GizmoSize());
+					Handles.ArrowHandleCap(0, pos, rot * Quaternion.Euler(90.0f, 0.0f, 0.0f), mod.GizmoSize(), EventType.Repaint);
 					col = Color.red;
 					col.a = a;
 					Handles.color = col;
-					Handles.ArrowCap(0, pos, rot * Quaternion.Euler(0.0f, -90.0f, 0.0f), mod.GizmoSize());
+					Handles.ArrowHandleCap(0, pos, rot * Quaternion.Euler(0.0f, -90.0f, 0.0f), mod.GizmoSize(), EventType.Repaint);
 				}
 
 				// gizmopos
@@ -225,15 +225,15 @@ public class MegaModifierEditor : Editor
 					col = Color.blue;
 					col.a = a;
 					Handles.color = col;
-					Handles.ArrowCap(0, pos, rot * Quaternion.Euler(180.0f, 0.0f, 0.0f), mod.GizmoSize());
+					Handles.ArrowHandleCap(0, pos, rot * Quaternion.Euler(180.0f, 0.0f, 0.0f), mod.GizmoSize(), EventType.Repaint);
 					col = Color.green;
 					col.a = a;
 					Handles.color = col;
-					Handles.ArrowCap(0, pos, rot * Quaternion.Euler(90.0f, 0.0f, 0.0f), mod.GizmoSize());
+					Handles.ArrowHandleCap(0, pos, rot * Quaternion.Euler(90.0f, 0.0f, 0.0f), mod.GizmoSize(), EventType.Repaint);
 					col = Color.red;
 					col.a = a;
 					Handles.color = col;
-					Handles.ArrowCap(0, pos, rot * Quaternion.Euler(0.0f, -90.0f, 0.0f), mod.GizmoSize());
+					Handles.ArrowHandleCap(0, pos, rot * Quaternion.Euler(0.0f, -90.0f, 0.0f), mod.GizmoSize(), EventType.Repaint);
 				}
 
 				Handles.matrix = Matrix4x4.identity;

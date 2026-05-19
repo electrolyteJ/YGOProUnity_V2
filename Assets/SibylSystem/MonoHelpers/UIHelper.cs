@@ -9,6 +9,7 @@ using YGOSharp.OCGWrapper.Enums;
 
 public static class UIHelper
 {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
     [DllImport("user32")]
     static extern bool FlashWindow(IntPtr handle, bool invert);
 
@@ -74,6 +75,9 @@ public static class UIHelper
     {
         FlashWindow(GetProcessWnd(),true);
     }
+#else
+    public static void Flash() { }
+#endif
 
     public static bool isMaximized()
     {

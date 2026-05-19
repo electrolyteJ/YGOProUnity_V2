@@ -160,7 +160,7 @@ public class ComponentSelector : ScriptableWizard
 					if (t == mType || t.IsSubclassOf(mType) && !list.Contains(obj))
 						list.Add(obj);
 				}
-				else if (PrefabUtility.GetPrefabType(obj) == PrefabType.Prefab)
+				else if (NGUIPrefabUtilityCompat.IsPrefabAsset(obj))
 				{
 					Object t = (obj as GameObject).GetComponent(mType);
 					if (t != null && !list.Contains(t)) list.Add(t);

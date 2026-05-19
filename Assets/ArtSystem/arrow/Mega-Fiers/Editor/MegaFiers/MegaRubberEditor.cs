@@ -88,7 +88,7 @@ public class MegaRubberEditor : MegaModifierEditor
 				Handles.color = col;
 
 				Vector3 p = tm.MultiplyPoint(mod.vr[i].cpos);
-				Handles.DotCap(i, p, Quaternion.identity, mod.size);
+				Handles.DotHandleCap(i, p, Quaternion.identity, mod.size, EventType.Repaint);
 			}
 
 			Handles.matrix = Matrix4x4.identity;
@@ -115,7 +115,7 @@ public class MegaRubberEditor : MegaModifierEditor
 				Handles.color = col;
 
 				Vector3 p = tm.MultiplyPoint(mod.vr[i].cpos);
-				Handles.DotCap(i, p, Quaternion.identity, mod.size);
+				Handles.DotHandleCap(i, p, Quaternion.identity, mod.size, EventType.Repaint);
 			}
 
 			Handles.matrix = Matrix4x4.identity;

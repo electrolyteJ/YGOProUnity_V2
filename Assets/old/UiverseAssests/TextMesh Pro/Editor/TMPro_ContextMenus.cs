@@ -22,7 +22,9 @@ namespace TMPro.EditorUtilities
       
         // Add a Context Menu to allow easy duplication of the Material.
 		//[MenuItem("CONTEXT/MaterialComponent/Duplicate Material", false)]
+#if !UNITY_2022_1_OR_NEWER
         [MenuItem("CONTEXT/Material/Duplicate Material", false)]
+#endif
         static void DuplicateMaterial(MenuCommand command)
         {
 			// Get the type of text object
@@ -64,7 +66,9 @@ namespace TMPro.EditorUtilities
 
 
 		//[MenuItem("CONTEXT/MaterialComponent/Copy Material Properties", false)]
+#if !UNITY_2022_1_OR_NEWER
         [MenuItem("CONTEXT/Material/Copy Material Properties", false)]
+#endif
         static void CopyMaterialProperties(MenuCommand command)
         {
             Material mat = null;
@@ -87,7 +91,9 @@ namespace TMPro.EditorUtilities
 
         // PASTE MATERIAL
 		//[MenuItem("CONTEXT/MaterialComponent/Paste Material Properties", false)]
+#if !UNITY_2022_1_OR_NEWER
 		[MenuItem("CONTEXT/Material/Paste Material Properties", false)]
+#endif
         static void PasteMaterialProperties(MenuCommand command)
         {
 
@@ -131,7 +137,9 @@ namespace TMPro.EditorUtilities
 
         // Enable Resetting of Material properties without losing unique properties of the font atlas.
 		//[MenuItem("CONTEXT/MaterialComponent/Reset", false, 2100)]
+#if !UNITY_2022_1_OR_NEWER
 		[MenuItem("CONTEXT/Material/Reset", false, 2100)]
+#endif
         static void ResetSettings(MenuCommand command)
         {
 
@@ -180,7 +188,9 @@ namespace TMPro.EditorUtilities
 	
         
         //This function is used for debugging and fixing potentially broken font atlas links.
+#if !UNITY_2022_1_OR_NEWER
         [MenuItem("CONTEXT/Material/Copy Atlas", false, 2000)]
+#endif
         static void CopyAtlas(MenuCommand command)
         {
             Material mat = command.context as Material;
@@ -191,7 +201,9 @@ namespace TMPro.EditorUtilities
         
     
         // This function is used for debugging and fixing potentially broken font atlas links     
+#if !UNITY_2022_1_OR_NEWER
         [MenuItem("CONTEXT/Material/Paste Atlas", false, 2001)]
+#endif
         static void PasteAtlas(MenuCommand command)
         {
             Material mat = command.context as Material;

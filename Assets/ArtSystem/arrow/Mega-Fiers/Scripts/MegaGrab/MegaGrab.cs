@@ -215,7 +215,7 @@ public class MegaGrab : MonoBehaviour
 			float xo = x + xa;
 			float yo = y + ya;
 
-			SrcCamera.projectionMatrix = CalcProjectionMatrix(mleft, mright, mbottom, mtop, SrcCamera.near, SrcCamera.far, xo, yo);
+			SrcCamera.projectionMatrix = CalcProjectionMatrix(mleft, mright, mbottom, mtop, SrcCamera.nearClipPlane, SrcCamera.farClipPlane, xo, yo);
 
 			SrcCamera.Render();
 
@@ -271,7 +271,7 @@ public class MegaGrab : MonoBehaviour
 			float xo = x + xa;
 			float yo = y + ya;
 
-			SrcCamera.projectionMatrix = CalcProjectionMatrix(mleft, mright, mbottom, mtop, SrcCamera.near, SrcCamera.far, xo, yo);
+			SrcCamera.projectionMatrix = CalcProjectionMatrix(mleft, mright, mbottom, mtop, SrcCamera.nearClipPlane, SrcCamera.farClipPlane, xo, yo);
 
 			SrcCamera.Render();
 

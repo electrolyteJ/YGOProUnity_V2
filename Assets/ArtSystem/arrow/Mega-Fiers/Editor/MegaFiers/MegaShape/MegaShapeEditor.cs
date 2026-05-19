@@ -456,7 +456,7 @@ public class MegaShapeEditor : Editor
 
 					//shape.splines[s].knots[p].p = Handles.FreeMoveHandle(pm, Quaternion.identity, ksize, Vector3.zero, Handles.SphereCap);	//CubeCap);
 					Handles.color = nocol;	//shape.VecCol;
-					Vector3 newp = Handles.FreeMoveHandle(pm, Quaternion.identity, knotsize * ringratio, Vector3.zero, Handles.CircleCap);	//SphereCap);	//CubeCap);
+					var fmh_459_48_639144536795052150 = Quaternion.identity; Vector3 newp = Handles.FreeMoveHandle(pm, knotsize * ringratio, Vector3.zero, Handles.CircleHandleCap);	//SphereCap);	//CubeCap);
 					shape.splines[s].knots[p].p += Vector3.Scale(newp - pm, dragplane);
 
 
@@ -512,7 +512,7 @@ public class MegaShapeEditor : Editor
 						//invec = Handles.PositionHandle(shape.splines[s].knots[p].invec, Quaternion.identity);	//shape.hsize);
 					//else
 					Handles.color = nocol;
-					Vector3 newinvec = Handles.FreeMoveHandle(shape.splines[s].knots[p].invec, Quaternion.identity, handlesize * ringratio, Vector3.zero, Handles.CircleCap);	//SphereCap);	//CubeCap);
+					var fmh_515_81_639144536795054890 = Quaternion.identity; Vector3 newinvec = Handles.FreeMoveHandle(shape.splines[s].knots[p].invec, handlesize * ringratio, Vector3.zero, Handles.CircleHandleCap);	//SphereCap);	//CubeCap);
 
 					invec += Vector3.Scale(newinvec - invec, dragplane);
 					//Debug.Log("sel " + selected + " new " + invec.ToString("0.0000") + " old " + shape.splines[s].knots[p].invec.ToString("0.0000"));
@@ -533,7 +533,7 @@ public class MegaShapeEditor : Editor
 					//if ( p == selected )
 						//outvec = Handles.PositionHandle(shape.splines[s].knots[p].outvec, Quaternion.identity);	//shape.hsize);
 					//else
-					Vector3 newoutvec = Handles.FreeMoveHandle(shape.splines[s].knots[p].outvec, Quaternion.identity, handlesize * ringratio, Vector3.zero, Handles.CircleCap);	//SphereCap);	//CubeCap);
+					var fmh_536_83_639144536795056220 = Quaternion.identity; Vector3 newoutvec = Handles.FreeMoveHandle(shape.splines[s].knots[p].outvec, handlesize * ringratio, Vector3.zero, Handles.CircleHandleCap);	//SphereCap);	//CubeCap);
 					outvec += Vector3.Scale(newoutvec - outvec, dragplane);
 
 					if ( outvec != shape.splines[s].knots[p].outvec )

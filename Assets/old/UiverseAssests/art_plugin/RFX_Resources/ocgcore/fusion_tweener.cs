@@ -3,37 +3,12 @@ using System.Collections;
 using System;
 
 public class fusion_tweener : MonoBehaviour {
-    ParticleEmitter[] emitters;
-    ParticleAnimator[] animators;
     ParticleSystem[] systems;
 	// Use this for initialization
 	void Start () {
-        emitters = GetComponentsInChildren<ParticleEmitter>();
-        animators = GetComponentsInChildren<ParticleAnimator>();
         systems = GetComponentsInChildren<ParticleSystem>();
         start_time = Program.TimePassed();
-        foreach (ParticleSystem system in systems)
-        {
-            system.startSpeed *= scaleFactor;
-            system.startSize *= scaleFactor;
-            system.gravityModifier *= scaleFactor;
-        }
-        //apply scaling to emitters
-        foreach (ParticleEmitter emitter in emitters)
-        {
-            emitter.minSize *= scaleFactor;
-            emitter.maxSize *= scaleFactor;
-            emitter.worldVelocity *= scaleFactor;
-            emitter.localVelocity *= scaleFactor;
-            emitter.rndVelocity *= scaleFactor;
-        }
-
-        //apply scaling to animators
-        foreach (ParticleAnimator animator in animators)
-        {
-            animator.force *= scaleFactor;
-            animator.rndForce *= scaleFactor;
-        }
+        ScaleShurikenSystems(scaleFactor);
 	}
     int step = 1;
     float scaleFactor = 0.1f;
@@ -75,27 +50,38 @@ public class fusion_tweener : MonoBehaviour {
             Destroy(gameObject);
             return;
         }
+        ScaleShurikenSystems(scaleFactor);
+    }
+
+    void ScaleShurikenSystems(float factor)
+    {
         foreach (ParticleSystem system in systems)
         {
-            system.startSpeed *= scaleFactor;
-            system.startSize *= scaleFactor;
-            system.gravityModifier *= scaleFactor;
+            var main = system.main;
+            main.startSpeed = ScaleCurve(main.startSpeed, factor);
+            main.startSize = ScaleCurve(main.startSize, factor);
+            main.gravityModifier = ScaleCurve(main.gravityModifier, factor);
         }
-        //apply scaling to emitters
-        foreach (ParticleEmitter emitter in emitters)
-        {
-            emitter.minSize *= scaleFactor;
-            emitter.maxSize *= scaleFactor;
-            emitter.worldVelocity *= scaleFactor;
-            emitter.localVelocity *= scaleFactor;
-            emitter.rndVelocity *= scaleFactor;
-        }
+    }
 
-        //apply scaling to animators
-        foreach (ParticleAnimator animator in animators)
+    static ParticleSystem.MinMaxCurve ScaleCurve(ParticleSystem.MinMaxCurve curve, float factor)
+    {
+        switch (curve.mode)
         {
-            animator.force *= scaleFactor;
-            animator.rndForce *= scaleFactor;
+            case ParticleSystemCurveMode.Constant:
+                curve.constant *= factor;
+                break;
+            case ParticleSystemCurveMode.TwoConstants:
+                curve.constantMin *= factor;
+                curve.constantMax *= factor;
+                break;
+            case ParticleSystemCurveMode.Curve:
+                curve.curveMultiplier *= factor;
+                break;
+            case ParticleSystemCurveMode.TwoCurves:
+                curve.curveMultiplier *= factor;
+                break;
         }
+        return curve;
     }
 }

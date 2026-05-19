@@ -996,6 +996,10 @@ public class Program : MonoBehaviour
         Application.targetFrameRate = 144;
         mouseParticle = Instantiate(new_mouse);
         instance = this;
+        RuntimeArchiveBootstrap.EnsureRequiredDirectories(delegate (string message)
+        {
+            Debug.Log(message);
+        });
         initialize();
         go(500, () => { gameStart(); });
     }

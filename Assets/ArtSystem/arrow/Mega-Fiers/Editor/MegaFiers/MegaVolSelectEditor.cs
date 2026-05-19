@@ -61,7 +61,7 @@ public class MegaVolSelectEditor : MegaModifierEditor
 					Vector3 p = tm.MultiplyPoint(mc.sverts[i]);
 
 					if ( w > 0.001f )
-						Handles.DotCap(i, p, Quaternion.identity, mod.gizSize);
+						Handles.DotHandleCap(i, p, Quaternion.identity, mod.gizSize, EventType.Repaint);
 				}
 			}
 
@@ -71,7 +71,7 @@ public class MegaVolSelectEditor : MegaModifierEditor
 			//Handles.DrawWireDisc(tm.MultiplyPoint(mod.origin), Vector3.up, mod.radius);
 			//Handles.DrawWireDisc(tm.MultiplyPoint(mod.origin), Vector3.right, mod.radius);
 			//Handles.DrawWireDisc(tm.MultiplyPoint(mod.origin), Vector3.forward, mod.radius);
-			Handles.SphereCap(0, tm.MultiplyPoint(mod.origin), Quaternion.identity, mod.radius * 2.0f);
+			Handles.SphereHandleCap(0, tm.MultiplyPoint(mod.origin), Quaternion.identity, mod.radius * 2.0f, EventType.Repaint);
 
 			Handles.matrix = tm;
 			mod.origin = Handles.PositionHandle(mod.origin, Quaternion.identity);

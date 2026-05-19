@@ -158,6 +158,13 @@ public class AIRoom : WindowServantSP
         command = command.Replace("'", "\"");
         if (lockhand) command += " Hand=1";
 
+        if (Application.platform != RuntimePlatform.WindowsEditor &&
+            Application.platform != RuntimePlatform.WindowsPlayer)
+        {
+            RMSshow_none("当前平台不支持人机对战。");
+            return;
+        }
+
         serverProcess = new System.Diagnostics.Process();
         serverProcess.StartInfo.UseShellExecute = false;
         serverProcess.StartInfo.FileName = "AI.Server.exe";

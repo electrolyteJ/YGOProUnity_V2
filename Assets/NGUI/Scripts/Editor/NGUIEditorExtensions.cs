@@ -5,6 +5,7 @@
 
 using UnityEngine;
 using System.IO;
+using UnityEditor.SceneManagement;
 
 /// <summary>
 /// This class contains NGUI's extensions to Unity Editor's functionality.
@@ -19,9 +20,6 @@ public static class NGUIEditorExtensions
 
 	static public RenderTexture RenderToTexture (this Camera cam, int width, int height)
 	{
-		// Render textures only work in Unity Pro
-		if (!UnityEditorInternal.InternalEditorUtility.HasPro()) return null;
-
 		RenderTexture rt = cam.targetTexture;
 
 		if (rt != null && (rt.width != width || rt.height != height))
@@ -48,9 +46,6 @@ public static class NGUIEditorExtensions
 
 	static public bool SaveRenderTextureAsPNG (this Camera cam, string filename)
 	{
-		// Render textures only work in Unity Pro
-		if (!UnityEditorInternal.InternalEditorUtility.HasPro()) return false;
-
 		RenderTexture rt = cam.targetTexture;
 		if (rt == null) return false;
 
@@ -91,7 +86,7 @@ internal class Unity5DynamicLabelWorkAround : UnityEditor.AssetModificationProce
 	{
 		foreach (var path in paths)
 		{
-			if (path == UnityEditor.EditorApplication.currentScene)
+			if (path == EditorSceneManager.GetActiveScene().path)
 			{
 				UILabel[] labels = Object.FindObjectsOfType<UILabel>();
 				for (int i = 0, imax = labels.Length; i < imax; ++i) labels[i].MarkAsChanged();

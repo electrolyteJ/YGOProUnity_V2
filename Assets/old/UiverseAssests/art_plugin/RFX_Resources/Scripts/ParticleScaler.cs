@@ -93,37 +93,6 @@ public class ParticleScaler : MonoBehaviour
 
 	void ScaleLegacySystems(float scaleFactor)
 	{
-#if UNITY_EDITOR 
-		//get all emitters we need to do scaling on
-		ParticleEmitter[] emitters = GetComponentsInChildren<ParticleEmitter>();
-
-		//get all animators we need to do scaling on
-		ParticleAnimator[] animators = GetComponentsInChildren<ParticleAnimator>();
-
-		//apply scaling to emitters
-		foreach (ParticleEmitter emitter in emitters)
-		{
-			emitter.minSize *= scaleFactor;
-			emitter.maxSize *= scaleFactor;
-			emitter.worldVelocity *= scaleFactor;
-			emitter.localVelocity *= scaleFactor;
-			emitter.rndVelocity *= scaleFactor;
-
-			//some variables cannot be accessed through regular script, we will acces them through a serialized object
-			SerializedObject so = new SerializedObject(emitter);
-
-			so.FindProperty("m_Ellipsoid").vector3Value *= scaleFactor;
-			so.FindProperty("tangentVelocity").vector3Value *= scaleFactor;
-			so.ApplyModifiedProperties();
-		}
-
-		//apply scaling to animators
-		foreach (ParticleAnimator animator in animators)
-		{
-			animator.force *= scaleFactor;
-			animator.rndForce *= scaleFactor;
-		}
-#endif
 	}
 
 	void ScaleTrailRenderers(float scaleFactor)

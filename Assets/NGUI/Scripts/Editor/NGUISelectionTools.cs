@@ -134,9 +134,7 @@ public class NGUISelectionTools
 		if (Selection.activeTransform != null)
 		{
 			// Check if the selected object is a prefab instance and display a warning
-			PrefabType type = PrefabUtility.GetPrefabType(Selection.activeGameObject);
-
-			if (type == PrefabType.PrefabInstance)
+			if (NGUIPrefabUtilityCompat.IsPrefabInstance(Selection.activeGameObject))
 			{
 				return EditorUtility.DisplayDialog("Losing prefab",
 					"This action will lose the prefab connection. Are you sure you wish to continue?",

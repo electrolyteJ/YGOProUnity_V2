@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 ///  https://stackoverflow.com/a/9164742/386091 </remarks>
 public static class ChildProcessTracker
 {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
     /// <summary>
     /// Add the process to be tracked. If our current process is killed, the child processes
     /// that we are tracking will be automatically killed, too. If the child process terminates
@@ -85,6 +86,9 @@ public static class ChildProcessTracker
     //  This can be verified by using SysInternals' Handle utility. When the job handle
     //  is closed, the child processes will be killed.
     private static readonly IntPtr s_jobHandle;
+#else
+    public static void AddProcess(Process process) { }
+#endif
 }
 
 public enum JobObjectInfoType

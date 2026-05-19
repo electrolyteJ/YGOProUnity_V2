@@ -254,13 +254,22 @@ public class selectDeck : WindowServantSP
         string path = "deck/" + superScrollView.selectedString + ".ydk";
         if (File.Exists(path))
         {
-            #if UNITY_EDITOR || UNITY_STANDALONE_WIN //编译器、Windows
-                System.Diagnostics.Process.Start("notepad.exe", path);
-            #elif UNITY_STANDALONE_OSX //Mac OS X
-                System.Diagnostics.Process.Start("open", "-e " + path);
-            #elif UNITY_STANDALONE_LINUX //Linux
-                System.Diagnostics.Process.Start("gedit", path);
-            #endif
+            try
+            {
+                #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+                    System.Diagnostics.Process.Start("notepad.exe", "\"" + path + "\"");
+                #elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+                    System.Diagnostics.Process.Start("/usr/bin/open", "-e \"" + path + "\"");
+                #elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
+                    System.Diagnostics.Process.Start("gedit", "\"" + path + "\"");
+                #else
+                    RMSshow_none("当前平台不支持直接打开卡组文件。");
+                #endif
+            }
+            catch (System.Exception)
+            {
+                RMSshow_none("未找到可用的卡组编辑器。");
+            }
         }
     }
 

@@ -1,0 +1,171 @@
+name: Build Desktop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+      - feature/*
+  pull_request:
+    branches:
+      - master
+      - main
+      - feature/*
+
+env:
+  UNITY_VERSION: 2022.3.62f3c1
+  BUILD_NAME: YGOPro2
+  RUNTIME_DIRS: cdb config deck expansions pack puzzle replay runtime-zips sound texture
+
+jobs:
+  build:
+    name: ${{ matrix.artifact_name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_platform: StandaloneWindows64
+            artifact_name: YGOPro2-windows
+            archive_name: YGOPro2-windows.zip
+            package_kind: windows
+          - target_platform: StandaloneOSX
+            artifact_name: YGOPro2-macos
+            archive_name: YGOPro2-macos.tar.gz
+            package_kind: macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.target_platform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ matrix.target_platform }}-
+            Library-
+
+      - name: Build Unity player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: ${{ matrix.target_platform }}
+          buildName: ${{ env.BUILD_NAME }}
+
+      - name: Build runtime archives
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p runtime-zips
+          rm -f runtime-zips/script.zip runtime-zips/picture.zip
+
+          if [ -d script ]; then
+            zip -r -q -9 runtime-zips/script.zip script -x '*/.archive-stamp'
+          fi
+
+          if [ -d picture ]; then
+            zip -r -q -0 runtime-zips/picture.zip picture -x '*/.DS_Store' -x '*/.archive-stamp'
+          fi
+
+      - name: Assemble packaged runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_root="build/${{ matrix.target_platform }}/${BUILD_NAME}"
+          package_root="dist/${{ matrix.artifact_name }}"
+
+          if [ ! -d "$build_root" ]; then
+            echo "::error::Build output not found at $build_root"
+            exit 1
+          fi
+
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+
+          shopt -s dotglob nullglob
+          cp -R "$build_root"/. "$package_root"/
+
+          for dir in ${RUNTIME_DIRS}; do
+            if [ -d "$dir" ]; then
+              rm -rf "$package_root/$dir"
+              cp -R "$dir" "$package_root/$dir"
+            else
+              echo "::warning::Runtime directory '$dir' is missing and will be skipped."
+            fi
+          done
+
+          mkdir -p "$package_root/deck" "$package_root/replay"
+
+          if [ "${{ matrix.package_kind }}" = "windows" ]; then
+            if [ ! -f "$package_root/${BUILD_NAME}.exe" ]; then
+              echo "::error::Expected Windows executable missing: $package_root/${BUILD_NAME}.exe"
+              exit 1
+            fi
+          fi
+
+          if [ "${{ matrix.package_kind }}" = "macos" ]; then
+            app_root="$package_root/${BUILD_NAME}.app"
+            macos_runtime_root="$app_root/Contents/MacOS"
+
+            if [ ! -d "$app_root" ]; then
+              echo "::error::Expected macOS app bundle missing: $app_root"
+              exit 1
+            fi
+
+            mkdir -p "$macos_runtime_root"
+            for dir in ${RUNTIME_DIRS}; do
+              if [ -d "$package_root/$dir" ]; then
+                rm -rf "$macos_runtime_root/$dir"
+                cp -R "$package_root/$dir" "$macos_runtime_root/$dir"
+              fi
+            done
+
+            launcher="$package_root/Run ${BUILD_NAME}.command"
+            printf '%s\n' \
+              '#!/bin/bash' \
+              'set -euo pipefail' \
+              'DIR="$(cd "$(dirname "$0")" && pwd)"' \
+              'cd "$DIR"' \
+              "exec \"\$DIR/${BUILD_NAME}.app/Contents/MacOS/${BUILD_NAME}\" \"\$@\"" \
+              > "$launcher"
+            chmod +x "$launcher"
+          fi
+
+      - name: Archive package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+          if [ "${{ matrix.package_kind }}" = "windows" ]; then
+            (
+              cd dist
+              zip -r -q "../artifacts/${{ matrix.archive_name }}" "${{ matrix.artifact_name }}"
+            )
+          else
+            tar -C dist -czf "artifacts/${{ matrix.archive_name }}" "${{ matrix.artifact_name }}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.archive_name }}
+          if-no-files-found: error

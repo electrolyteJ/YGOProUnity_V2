@@ -163,7 +163,7 @@ namespace TMPro.EditorUtilities
 
             // BOTTOM LEFT HANDLE
             Vector3 old_BottomLeft = m_Rect_handlePoints[0];
-            Vector3 new_BottomLeft = Handles.FreeMoveHandle(old_BottomLeft, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);        
+            var fmh_166_77_639144536794915340 = Quaternion.identity; Vector3 new_BottomLeft = Handles.FreeMoveHandle(old_BottomLeft, handleSize, Vector3.zero, Handles.SphereHandleCap);        
             if (old_BottomLeft != new_BottomLeft)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -177,7 +177,7 @@ namespace TMPro.EditorUtilities
 
             // LEFT HANDLE            
             Vector3 old_Left = (m_Rect_handlePoints[0] + m_Rect_handlePoints[1]) / 2;          
-            Vector3 new_Left = Handles.FreeMoveHandle(old_Left, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_180_65_639144536794919180 = Quaternion.identity; Vector3 new_Left = Handles.FreeMoveHandle(old_Left, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_Left != new_Left)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -190,7 +190,7 @@ namespace TMPro.EditorUtilities
          
             // TOP LEFT HANDLE
             Vector3 old_TopLeft = m_Rect_handlePoints[1];
-            Vector3 new_TopLeft = Handles.FreeMoveHandle(old_TopLeft, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_193_71_639144536794920450 = Quaternion.identity; Vector3 new_TopLeft = Handles.FreeMoveHandle(old_TopLeft, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_TopLeft != new_TopLeft)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -204,7 +204,7 @@ namespace TMPro.EditorUtilities
 
             // TOP HANDLE            
             Vector3 old_Top = (m_Rect_handlePoints[1] + m_Rect_handlePoints[2]) / 2;
-            Vector3 new_Top = Handles.FreeMoveHandle(old_Top, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_207_63_639144536794921530 = Quaternion.identity; Vector3 new_Top = Handles.FreeMoveHandle(old_Top, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_Top != new_Top)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -217,7 +217,7 @@ namespace TMPro.EditorUtilities
 
             // TOP RIGHT HANDLE
             Vector3 old_TopRight = m_Rect_handlePoints[2];
-            Vector3 new_TopRight = Handles.FreeMoveHandle(old_TopRight, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_220_73_639144536794922530 = Quaternion.identity; Vector3 new_TopRight = Handles.FreeMoveHandle(old_TopRight, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_TopRight != new_TopRight)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -231,7 +231,7 @@ namespace TMPro.EditorUtilities
 
             // RIGHT HANDLE            
             Vector3 old_Right = (m_Rect_handlePoints[2] + m_Rect_handlePoints[3]) / 2;
-            Vector3 new_Right = Handles.FreeMoveHandle(old_Right, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_234_67_639144536794923450 = Quaternion.identity; Vector3 new_Right = Handles.FreeMoveHandle(old_Right, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_Right != new_Right)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -244,7 +244,7 @@ namespace TMPro.EditorUtilities
 
             // BOTTOM RIGHT HANDLE
             Vector3 old_BottomRight = m_Rect_handlePoints[3];
-            Vector3 new_BottomRight = Handles.FreeMoveHandle(old_BottomRight, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_247_79_639144536794924360 = Quaternion.identity; Vector3 new_BottomRight = Handles.FreeMoveHandle(old_BottomRight, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_BottomRight != new_BottomRight)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -258,7 +258,7 @@ namespace TMPro.EditorUtilities
 
             // BOTTOM HANDLE            
             Vector3 old_Bottom = (m_Rect_handlePoints[0] + m_Rect_handlePoints[3]) / 2;
-            Vector3 new_Bottom = Handles.FreeMoveHandle(old_Bottom, Quaternion.identity, handleSize, Vector3.zero, Handles.SphereCap);
+            var fmh_261_69_639144536794925340 = Quaternion.identity; Vector3 new_Bottom = Handles.FreeMoveHandle(old_Bottom, handleSize, Vector3.zero, Handles.SphereHandleCap);
             if (old_Bottom != new_Bottom)
             {
                 Undo.RecordObjects(new Object[] { m_textContainer, m_transform }, "Rectangle Dimension Changes");
@@ -291,7 +291,7 @@ namespace TMPro.EditorUtilities
 
             // LEFT HANDLE
             Vector3 old_left = (m_Margin_handlePoints[0] + m_Margin_handlePoints[1]) * 0.5f;
-            Vector3 new_left = Handles.FreeMoveHandle(old_left, Quaternion.identity, handleSize, Vector3.zero, Handles.DotCap);            
+            var fmh_294_65_639144536794926520 = Quaternion.identity; Vector3 new_left = Handles.FreeMoveHandle(old_left, handleSize, Vector3.zero, Handles.DotHandleCap);            
             if (old_left != new_left)
             {
                 Undo.RecordObject(target, "Margin Changes");
@@ -303,7 +303,7 @@ namespace TMPro.EditorUtilities
 
             // TOP HANDLE
             Vector3 old_top = (m_Margin_handlePoints[1] + m_Margin_handlePoints[2]) * 0.5f;
-            Vector3 new_top = Handles.FreeMoveHandle(old_top, Quaternion.identity, handleSize, Vector3.zero, Handles.DotCap);
+            var fmh_306_63_639144536794927330 = Quaternion.identity; Vector3 new_top = Handles.FreeMoveHandle(old_top, handleSize, Vector3.zero, Handles.DotHandleCap);
             if (old_top != new_top)
             {
                 Undo.RecordObject(target, "Margin Changes");
@@ -315,7 +315,7 @@ namespace TMPro.EditorUtilities
 
             // RIGHT HANDLE
             Vector3 old_right = (m_Margin_handlePoints[2] + m_Margin_handlePoints[3]) * 0.5f;
-            Vector3 new_right = Handles.FreeMoveHandle(old_right, Quaternion.identity, handleSize, Vector3.zero, Handles.DotCap);
+            var fmh_318_67_639144536794928110 = Quaternion.identity; Vector3 new_right = Handles.FreeMoveHandle(old_right, handleSize, Vector3.zero, Handles.DotHandleCap);
             if (old_right != new_right)
             {
                 Undo.RecordObject(target, "Margin Changes");
@@ -327,7 +327,7 @@ namespace TMPro.EditorUtilities
 
             // BOTTOM HANDLE
             Vector3 old_bottom = (m_Margin_handlePoints[3] + m_Margin_handlePoints[0]) * 0.5f;
-            Vector3 new_bottom = Handles.FreeMoveHandle(old_bottom, Quaternion.identity, handleSize, Vector3.zero, Handles.DotCap);
+            var fmh_330_69_639144536794928890 = Quaternion.identity; Vector3 new_bottom = Handles.FreeMoveHandle(old_bottom, handleSize, Vector3.zero, Handles.DotHandleCap);
             if (old_bottom != new_bottom)
             {
                 Undo.RecordObject(target, "Margin Changes");

@@ -52,6 +52,8 @@ public class iTween : MonoBehaviour{
 	
 	//camera fade object:
 	private static GameObject cameraFade;
+	private static Type legacyGUITextureType;
+	private static Type legacyGUITextType;
 	
 	//status members (made public for visual troubleshooting in the inspector):
 	public string id, type, method;
@@ -78,6 +80,84 @@ public class iTween : MonoBehaviour{
 	private Vector2[] vector2s;
 	private Color[,] colors;
 	private float[] floats;
+
+	private static Type LegacyGUITextureType{
+		get{
+			if(legacyGUITextureType==null){
+				legacyGUITextureType = typeof(Component).Assembly.GetType("UnityEngine.GUITexture");
+			}
+			return legacyGUITextureType;
+		}
+	}
+
+	private static Type LegacyGUITextType{
+		get{
+			if(legacyGUITextType==null){
+				legacyGUITextType = typeof(Component).Assembly.GetType("UnityEngine.GUIText");
+			}
+			return legacyGUITextType;
+		}
+	}
+
+	private static Component GetLegacyGUITexture(GameObject target){
+		return target != null && LegacyGUITextureType != null ? target.GetComponent(LegacyGUITextureType) : null;
+	}
+
+	private static Component GetLegacyGUIText(GameObject target){
+		return target != null && LegacyGUITextType != null ? target.GetComponent(LegacyGUITextType) : null;
+	}
+
+	private static bool TryGetLegacyColor(GameObject target, out Color color){
+		Component guiTexture = GetLegacyGUITexture(target);
+		if(guiTexture != null){
+			color = (Color)guiTexture.GetType().GetProperty("color").GetValue(guiTexture, null);
+			return true;
+		}
+
+		Component guiText = GetLegacyGUIText(target);
+		if(guiText != null){
+			Material material = (Material)guiText.GetType().GetProperty("material").GetValue(guiText, null);
+			if(material != null){
+				color = material.color;
+				return true;
+			}
+		}
+
+		color = default(Color);
+		return false;
+	}
+
+	private static bool SetLegacyColor(GameObject target, Color color){
+		Component guiTexture = GetLegacyGUITexture(target);
+		if(guiTexture != null){
+			guiTexture.GetType().GetProperty("color").SetValue(guiTexture, color, null);
+			return true;
+		}
+
+		Component guiText = GetLegacyGUIText(target);
+		if(guiText != null){
+			Material material = (Material)guiText.GetType().GetProperty("material").GetValue(guiText, null);
+			if(material != null){
+				material.color = color;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static bool SetLegacyTexture(GameObject target, Texture texture){
+		Component guiTexture = GetLegacyGUITexture(target);
+		if(guiTexture != null){
+			guiTexture.GetType().GetProperty("texture").SetValue(guiTexture, texture, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static Component AddLegacyGUITexture(GameObject target){
+		return target != null && LegacyGUITextureType != null ? target.AddComponent(LegacyGUITextureType) : null;
+	}
 	private Rect[] rects;
 	private CRSpline path;
 	private Vector3 preUpdate;
@@ -699,10 +779,8 @@ public class iTween : MonoBehaviour{
 		}
 		
 		//set tempColor and base fromColor:
-		if(target.GetComponent(typeof(GUITexture))){
-			tempColor=fromColor=target.GetComponent<GUITexture>().color;	
-		}else if(target.GetComponent(typeof(GUIText))){
-			tempColor=fromColor=target.GetComponent<GUIText>().material.color;
+		if(TryGetLegacyColor(target, out tempColor)){
+			fromColor=tempColor;
 		}else if(target.GetComponent<Renderer>()){
 			tempColor=fromColor=target.GetComponent<Renderer>().material.color;
 		}else if(target.GetComponent<Light>()){
@@ -737,10 +815,7 @@ public class iTween : MonoBehaviour{
 		}
 		
 		//apply fromColor:
-		if(target.GetComponent(typeof(GUITexture))){
-			target.GetComponent<GUITexture>().color=fromColor;	
-		}else if(target.GetComponent(typeof(GUIText))){
-			target.GetComponent<GUIText>().material.color=fromColor;
+		if(SetLegacyColor(target, fromColor)){
 		}else if(target.GetComponent<Renderer>()){
 			target.GetComponent<Renderer>().material.color=fromColor;
 		}else if(target.GetComponent<Light>()){
@@ -3377,12 +3452,10 @@ public class iTween : MonoBehaviour{
 		//colors = new Color[3];
 		
 		//from and init to values:
-		if(GetComponent(typeof(GUITexture))){
+		Color legacyColor;
+		if(TryGetLegacyColor(gameObject, out legacyColor)){
 			colors = new Color[1,3];
-			colors[0,0] = colors[0,1] = GetComponent<GUITexture>().color;
-		}else if(GetComponent(typeof(GUIText))){
-			colors = new Color[1,3];
-			colors[0,0] = colors[0,1] = GetComponent<GUIText>().material.color;
+			colors[0,0] = colors[0,1] = legacyColor;
 		}else if(GetComponent<Renderer>()){
 			colors = new Color[GetComponent<Renderer>().materials.Length,3];
 			for (int i = 0; i < GetComponent<Renderer>().materials.Length; i++) {
@@ -4153,12 +4226,7 @@ public class iTween : MonoBehaviour{
 		*/
 		
 		//apply:
-		if(GetComponent(typeof(GUITexture))){
-			//guiTexture.color=colors[2];
-			GetComponent<GUITexture>().color=colors[0,2];
-		}else if(GetComponent(typeof(GUIText))){
-			//guiText.material.color=colors[2];
-			GetComponent<GUIText>().material.color=colors[0,2];
+		if(SetLegacyColor(gameObject, colors[0,2])){
 		}else if(GetComponent<Renderer>()){
 			//renderer.material.color=colors[2];
 			for (int i = 0; i < colors.GetLength(0); i++) {
@@ -4171,12 +4239,7 @@ public class iTween : MonoBehaviour{
 		
 		//dial in:
 		if(percentage==1){
-			if(GetComponent(typeof(GUITexture))){
-				//guiTexture.color=colors[1];
-				GetComponent<GUITexture>().color=colors[0,1];
-			}else if(GetComponent(typeof(GUIText))){
-				//guiText.material.color=colors[1];
-				GetComponent<GUIText>().material.color=colors[0,1];
+			if(SetLegacyColor(gameObject, colors[0,1])){
 			}else if(GetComponent<Renderer>()){
 				//renderer.material.color=colors[1];	
 				for (int i = 0; i < colors.GetLength(0); i++) {
@@ -4907,10 +4970,9 @@ public class iTween : MonoBehaviour{
 		}
 		
 		//init values:
-		if(target.GetComponent(typeof(GUITexture))){
-			colors[0] = colors[1] = target.GetComponent<GUITexture>().color;
-		}else if(target.GetComponent(typeof(GUIText))){
-			colors[0] = colors[1] = target.GetComponent<GUIText>().material.color;
+		Color legacyColor;
+		if(TryGetLegacyColor(target, out legacyColor)){
+			colors[0] = colors[1] = legacyColor;
 		}else if(target.GetComponent<Renderer>()){
 			colors[0] = colors[1] = target.GetComponent<Renderer>().material.color;
 		}else if(target.GetComponent<Light>()){
@@ -4942,10 +5004,7 @@ public class iTween : MonoBehaviour{
 		colors[3].a=Mathf.SmoothDamp(colors[0].a,colors[1].a,ref colors[2].a,time);
 				
 		//apply:
-		if(target.GetComponent(typeof(GUITexture))){
-			target.GetComponent<GUITexture>().color=colors[3];
-		}else if(target.GetComponent(typeof(GUIText))){
-			target.GetComponent<GUIText>().material.color=colors[3];
+		if(SetLegacyColor(target, colors[3])){
 		}else if(target.GetComponent<Renderer>()){
 			target.GetComponent<Renderer>().material.color=colors[3];
 		}else if(target.GetComponent<Light>()){
@@ -6071,7 +6130,7 @@ public class iTween : MonoBehaviour{
 	/// </param>
 	public static void CameraFadeSwap(Texture2D texture){
 		if(cameraFade){
-			cameraFade.GetComponent<GUITexture>().texture=texture;
+			SetLegacyTexture(cameraFade, texture);
 		}
 	}
 	
@@ -6094,9 +6153,9 @@ public class iTween : MonoBehaviour{
 			//establish colorFade object:
 			cameraFade = new GameObject("iTween Camera Fade");
 			cameraFade.transform.position= new Vector3(.5f,.5f,depth);
-			cameraFade.AddComponent<GUITexture>();
-			cameraFade.GetComponent<GUITexture>().texture=texture;
-			cameraFade.GetComponent<GUITexture>().color = new Color(.5f,.5f,.5f,0);
+			AddLegacyGUITexture(cameraFade);
+			SetLegacyTexture(cameraFade, texture);
+			SetLegacyColor(cameraFade, new Color(.5f,.5f,.5f,0));
 			return cameraFade;
 		}
 	}
@@ -6117,9 +6176,9 @@ public class iTween : MonoBehaviour{
 			//establish colorFade object:
 			cameraFade = new GameObject("iTween Camera Fade");
 			cameraFade.transform.position= new Vector3(.5f,.5f,Defaults.cameraFadeDepth);
-			cameraFade.AddComponent<GUITexture>();
-			cameraFade.GetComponent<GUITexture>().texture=texture;
-			cameraFade.GetComponent<GUITexture>().color = new Color(.5f,.5f,.5f,0);
+			AddLegacyGUITexture(cameraFade);
+			SetLegacyTexture(cameraFade, texture);
+			SetLegacyColor(cameraFade, new Color(.5f,.5f,.5f,0));
 			return cameraFade;
 		}
 	}
@@ -6137,9 +6196,9 @@ public class iTween : MonoBehaviour{
 			//establish colorFade object:
 			cameraFade = new GameObject("iTween Camera Fade");
 			cameraFade.transform.position= new Vector3(.5f,.5f,Defaults.cameraFadeDepth);
-			cameraFade.AddComponent<GUITexture>();
-			cameraFade.GetComponent<GUITexture>().texture=CameraTexture(Color.black);
-			cameraFade.GetComponent<GUITexture>().color = new Color(.5f,.5f,.5f,0);
+			AddLegacyGUITexture(cameraFade);
+			SetLegacyTexture(cameraFade, CameraTexture(Color.black));
+			SetLegacyColor(cameraFade, new Color(.5f,.5f,.5f,0));
 			return cameraFade;
 		}
 	}	

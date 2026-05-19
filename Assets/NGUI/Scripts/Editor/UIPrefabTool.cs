@@ -170,7 +170,7 @@ public class UIPrefabTool : EditorWindow
 			if (string.IsNullOrEmpty(path)) return;
 			NGUISettings.currentPath = System.IO.Path.GetDirectoryName(path);
 
-			go = PrefabUtility.CreatePrefab(path, go);
+			go = NGUIPrefabUtilityCompat.SaveAsPrefabAsset(go, path);
 			if (go == null) return;
 
 			guid = NGUIEditorTools.ObjectToGUID(go);
@@ -410,7 +410,7 @@ public class UIPrefabTool : EditorWindow
 			item.dynamicTex = false;
 			return;
 		}
-		else if (!UnityEditorInternal.InternalEditorUtility.HasPro())
+		else
 #endif
 		{
 			// Render textures only work in Unity Pro

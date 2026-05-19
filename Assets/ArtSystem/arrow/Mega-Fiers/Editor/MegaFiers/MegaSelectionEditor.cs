@@ -45,7 +45,7 @@ public class MegaSelectionEditor : MegaModifierEditor
 				Handles.color = col;
 
 				Vector3 p = tm.MultiplyPoint(mc.sverts[i]);
-				Handles.DotCap(i, p, Quaternion.identity, 0.01f);
+				Handles.DotHandleCap(i, p, Quaternion.identity, 0.01f, EventType.Repaint);
 			}
 
 			Handles.matrix = Matrix4x4.identity;

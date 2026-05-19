@@ -286,14 +286,6 @@ public class UIInput : MonoBehaviour
 			if (mDoInit) Init();
 			mDrawStart = 0;
 
-			// BB10's implementation has a bug in Unity
- #if UNITY_4_3
-			if (Application.platform == RuntimePlatform.BB10Player)
- #else
-			if (Application.platform == RuntimePlatform.BlackBerryPlayer)
- #endif
-				value = value.Replace("\\b", "\b");
-
 			// Validate all input
 			value = Validate(value);
 #if MOBILE
@@ -648,14 +640,6 @@ public class UIInput : MonoBehaviour
 			if (pf == RuntimePlatform.IPhonePlayer
 				|| pf == RuntimePlatform.Android
 				|| pf == RuntimePlatform.WP8Player
- #if UNITY_4_3
-				|| pf == RuntimePlatform.BB10Player
- #else
-				|| pf == RuntimePlatform.BlackBerryPlayer
-				|| pf == RuntimePlatform.MetroPlayerARM
-				|| pf == RuntimePlatform.MetroPlayerX64
-				|| pf == RuntimePlatform.MetroPlayerX86
- #endif
 			)
 			{
 				string val;
@@ -891,8 +875,7 @@ public class UIInput : MonoBehaviour
 
 		bool isMac = (
 			rp == RuntimePlatform.OSXEditor ||
-			rp == RuntimePlatform.OSXPlayer ||
-			rp == RuntimePlatform.OSXWebPlayer);
+			rp == RuntimePlatform.OSXPlayer);
 
 		bool ctrl = isMac ?
 			((ev.modifiers & EventModifiers.Command) != 0) :

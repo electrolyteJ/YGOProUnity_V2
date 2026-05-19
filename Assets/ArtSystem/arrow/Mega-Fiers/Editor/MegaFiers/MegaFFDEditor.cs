@@ -74,7 +74,7 @@ public class MegaFFDEditor : MegaModifierEditor
 				Vector3 p = ffd.GetPoint(i) + ffd.bcenter;
 
 				//pm = Handles.PositionHandle(p, Quaternion.identity);
-				pm = Handles.FreeMoveHandle(p, Quaternion.identity, ffd.KnotSize * 0.1f, Vector3.zero, Handles.CircleCap);
+				var fmh_77_36_639144536794741920 = Quaternion.identity; pm = Handles.FreeMoveHandle(p, ffd.KnotSize * 0.1f, Vector3.zero, Handles.CircleHandleCap);
 
 				pm -= ffd.bcenter;
 				p = Vector3.Scale(pm, osize);
