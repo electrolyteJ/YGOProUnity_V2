@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using App.Features.Room.Services;
+using AppRoomScreenController = App.UI.Screens.Room.RoomScreenController;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,9 +8,40 @@ using YGOSharp.Network.Enums;
 
 public class Room : WindowServantSP
 {
+    const string DeckFileExtension = ".ydk";
+
     UIselectableList superScrollView = null;
 
     string sort = "sortByTimeDeck";
+
+    private RoomFlowService flowService;
+    private AppRoomScreenController screenController;
+
+    private RoomFlowService FlowService
+    {
+        get
+        {
+            if (flowService == null)
+            {
+                flowService = new RoomFlowService();
+            }
+
+            return flowService;
+        }
+    }
+
+    private AppRoomScreenController ScreenController
+    {
+        get
+        {
+            if (screenController == null)
+            {
+                screenController = new AppRoomScreenController(FlowService);
+            }
+
+            return screenController;
+        }
+    }
 
     public override void initialize()
     {
@@ -19,20 +52,26 @@ public class Room : WindowServantSP
 
     void onSelected()
     {
-        Config.Set("deckInUse", superScrollView.selectedString);
-        if (selftype < realPlayers.Length && realPlayers[selftype] != null && realPlayers[selftype].getIfPreped())
-        {
-            TcpHelper.CtosMessage_HsNotReady();
-            TcpHelper.CtosMessage_UpdateDeck(new YGOSharp.Deck("deck/" + superScrollView.selectedString + ".ydk"));
-            TcpHelper.CtosMessage_HsReady();
-        }
+        ScreenController.SelectDeck(superScrollView.selectedString, CreateSeatInteractionRequest(), CreateRoomInteractionActions());
+    }
+
+    private static bool IsDeckFileName(string fileName)
+    {
+        return !string.IsNullOrEmpty(fileName) &&
+               fileName.Length > DeckFileExtension.Length &&
+               fileName.EndsWith(DeckFileExtension, StringComparison.Ordinal);
+    }
+
+    private static string GetDeckDisplayName(string fileName)
+    {
+        return fileName.Substring(0, fileName.Length - DeckFileExtension.Length);
     }
 
     void printFile()
     {
         string deckInUse = Config.Get("deckInUse","wizard");
         superScrollView.clear();
-        FileInfo[] fileInfos = (new DirectoryInfo("deck")).GetFiles();
+        FileInfo[] fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Deck);
         if (Config.Get(sort,"1") == "1")
         {
             Array.Sort(fileInfos, UIHelper.CompareTime);
@@ -43,27 +82,23 @@ public class Room : WindowServantSP
         }
         for (int i = 0; i < fileInfos.Length; i++)
         {
-            if (fileInfos[i].Name.Length > 4)
+            if (IsDeckFileName(fileInfos[i].Name))
             {
-                if (fileInfos[i].Name.Substring(fileInfos[i].Name.Length - 4, 4) == ".ydk")
+                string deckName = GetDeckDisplayName(fileInfos[i].Name);
+                if (deckName == deckInUse)
                 {
-                    if (fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4) == deckInUse)
-                    {
-                        superScrollView.add(fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4));
-                    }
+                    superScrollView.add(deckName);
                 }
             }
         }
         for (int i = 0; i < fileInfos.Length; i++)
         {
-            if (fileInfos[i].Name.Length > 4)
+            if (IsDeckFileName(fileInfos[i].Name))
             {
-                if (fileInfos[i].Name.Substring(fileInfos[i].Name.Length - 4, 4) == ".ydk")
+                string deckName = GetDeckDisplayName(fileInfos[i].Name);
+                if (deckName != deckInUse)
                 {
-                    if (fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4) != deckInUse)
-                    {
-                        superScrollView.add(fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4));
-                    }
+                    superScrollView.add(deckName);
                 }
             }
         }
@@ -71,23 +106,20 @@ public class Room : WindowServantSP
 
     public override void show()
     {
-        if (isShowed == true)
-        {
-            Menu.deleteShell();
-        }
-        base.show();
-        Program.I().ocgcore.handler = handler;
-        UIHelper.registEvent(toolBar, "input_", onChat);
-        Program.charge();
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
+    }
+
+    public override void hide()
+    {
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
     }
 
     public void onSubmit(string val)
     {
-        if (val != "")
-        {
-            TcpHelper.CtosMessage_Chat(val);
-            //AddChatMsg(val, -1);
-        }
+        ScreenController.SubmitChat(val, CreateRoomInteractionActions());
+        //AddChatMsg(val, -1);
     }
 
     public void onChat()
@@ -582,7 +614,8 @@ public class Room : WindowServantSP
 
     public void StocMessage_GameMsg(BinaryReader r)
     {
-        showOcgcore();  
+        Program.DEBUGLOG("Room.StocMessage_GameMsg called, isShowed=" + Program.I().ocgcore.isShowed);
+        showOcgcore();
         Package p = new Package();
         p.Fuction = r.ReadByte();
         p.Data = new BinaryMaster(r.ReadToEnd());
@@ -598,20 +631,21 @@ public class Room : WindowServantSP
         }
         if (Program.I().ocgcore.isShowed == false)
         {
+            Program.DEBUGLOG("showOcgcore: entering duel scene, selftype=" + selftype + " roomPlayers[0]=" + (roomPlayers[0] != null ? roomPlayers[0].name : "NULL") + " roomPlayers[1]=" + (roomPlayers[1] != null ? roomPlayers[1].name : "NULL"));
             Program.camera_game_main.transform.position = new Vector3(0, 230, -230);
             if (mode != 2)
             {
                 if (selftype == 1)
                 {
-                    Program.I().ocgcore.name_0 = roomPlayers[1].name;
-                    Program.I().ocgcore.name_1 = roomPlayers[0].name;
+                    Program.I().ocgcore.name_0 = roomPlayers[1] != null ? roomPlayers[1].name : "???";
+                    Program.I().ocgcore.name_1 = roomPlayers[0] != null ? roomPlayers[0].name : "???";
                     Program.I().ocgcore.name_0_tag = "---";
                     Program.I().ocgcore.name_1_tag = "---";
                 }
                 else
                 {
-                    Program.I().ocgcore.name_0 = roomPlayers[0].name;
-                    Program.I().ocgcore.name_1 = roomPlayers[1].name;
+                    Program.I().ocgcore.name_0 = roomPlayers[0] != null ? roomPlayers[0].name : "???";
+                    Program.I().ocgcore.name_1 = roomPlayers[1] != null ? roomPlayers[1].name : "???";
                     Program.I().ocgcore.name_0_tag = "---";
                     Program.I().ocgcore.name_1_tag = "---";
                 }
@@ -620,23 +654,22 @@ public class Room : WindowServantSP
             {
                 if (selftype == 2 || selftype == 3)
                 {
-                    Program.I().ocgcore.name_0 = roomPlayers[2].name;
-                    Program.I().ocgcore.name_1 = roomPlayers[0].name;
-                    Program.I().ocgcore.name_0_tag = roomPlayers[3].name;
-                    Program.I().ocgcore.name_1_tag = roomPlayers[1].name;
+                    Program.I().ocgcore.name_0 = roomPlayers[2] != null ? roomPlayers[2].name : "???";
+                    Program.I().ocgcore.name_1 = roomPlayers[0] != null ? roomPlayers[0].name : "???";
+                    Program.I().ocgcore.name_0_tag = roomPlayers[3] != null ? roomPlayers[3].name : "???";
+                    Program.I().ocgcore.name_1_tag = roomPlayers[1] != null ? roomPlayers[1].name : "???";
                 }
                 else
                 {
-                    Program.I().ocgcore.name_0 = roomPlayers[0].name;
-                    Program.I().ocgcore.name_1 = roomPlayers[2].name;
-                    Program.I().ocgcore.name_0_tag = roomPlayers[1].name;
-                    Program.I().ocgcore.name_1_tag = roomPlayers[3].name;
+                    Program.I().ocgcore.name_0 = roomPlayers[0] != null ? roomPlayers[0].name : "???";
+                    Program.I().ocgcore.name_1 = roomPlayers[2] != null ? roomPlayers[2].name : "???";
+                    Program.I().ocgcore.name_0_tag = roomPlayers[1] != null ? roomPlayers[1].name : "???";
+                    Program.I().ocgcore.name_1_tag = roomPlayers[3] != null ? roomPlayers[3].name : "???";
                 }
             }
             Program.I().ocgcore.timeLimit = time_limit;
             Program.I().ocgcore.lpLimit = start_lp;
             Program.I().ocgcore.InAI = false;
-            Program.notGo(showCoreHandler);
             Program.go(10, showCoreHandler);
         }
     }
@@ -684,7 +717,8 @@ public class Room : WindowServantSP
 
     void realize()
     {
-        Config.Set("deckInUse", superScrollView.selectedString);
+        if (superScrollView != null)
+            Config.Set("deckInUse", superScrollView.selectedString);
         string description = "";
         if (mode == 0)
         {
@@ -823,6 +857,7 @@ public class Room : WindowServantSP
         {
             createWindow(Program.I().remaster_room);
         }
+        ScreenController.Bind(gameObject, FlowService, ApplyLegacyShow, ApplyLegacyHide);
         lazyRoom = gameObject.GetComponent<lazyRoom>();
         fixScreenProblem();
         superScrollView = gameObject.GetComponentInChildren<UIselectableList>();
@@ -873,20 +908,13 @@ public class Room : WindowServantSP
         {
             roomPlayers[arg1].prep = arg2;
         }
-        if (arg2)
-        {
-            TcpHelper.CtosMessage_UpdateDeck(new YGOSharp.Deck("deck/" + Config.Get("deckInUse","miaouwu") + ".ydk"));
-            TcpHelper.CtosMessage_HsReady();
-        }
-        else
-        {
-            TcpHelper.CtosMessage_HsNotReady();
-        }
+
+        ScreenController.HandlePrepareChanged(arg2, Config.Get("deckInUse", "miaouwu"), CreateRoomInteractionActions());
     }
 
     private void OnKick(int pos)
     {
-        TcpHelper.CtosMessage_HsKick(pos);
+        ScreenController.KickPlayer(pos, CreateRoomInteractionActions());
     }
 
     private UIButton startButton()
@@ -918,35 +946,102 @@ public class Room : WindowServantSP
     {
         if (gameObjectListened.name == "exit_")
         {
-            Program.I().ocgcore.onExit();
+            ScreenController.Close(new RoomCloseActions
+            {
+                LeaveRoom = delegate { Program.I().ocgcore.onExit(); }
+            });
         }
         if (gameObjectListened.name == "ready_")
         {
             if (selftype < realPlayers.Length && realPlayers[selftype] != null)
             {
-                if (realPlayers[selftype].getIfPreped())
-                {
-                    TcpHelper.CtosMessage_HsNotReady();
-                }
-                else
-                {
-                    TcpHelper.CtosMessage_UpdateDeck(new YGOSharp.Deck("deck/" + Config.Get("deckInUse", "wizard") + ".ydk"));
-                    TcpHelper.CtosMessage_HsReady();
-                }
+                ScreenController.HandleReadyToggle(CreateSeatInteractionRequest(), CreateRoomInteractionActions());
             }
         }
         if (gameObjectListened.name == "duelist_")
         {
-            TcpHelper.CtosMessage_HsToDuelist();
+            ScreenController.MoveToDuelist(CreateRoomInteractionActions());
         }
         if (gameObjectListened.name == "observer_")
         {
-            TcpHelper.CtosMessage_HsToObserver();
+            ScreenController.MoveToObserver(CreateRoomInteractionActions());
         }
         if (gameObjectListened.name == "start_")
         {
-            TcpHelper.CtosMessage_HsStart();
+            ScreenController.StartDuel(CreateRoomInteractionActions());
         }
+    }
+
+    private void ApplyLegacyShow()
+    {
+        if (isShowed)
+        {
+            Menu.deleteShell();
+        }
+
+        base.show();
+        Program.I().ocgcore.handler = handler;
+        UIHelper.registEvent(toolBar, "input_", onChat);
+        Program.charge();
+    }
+
+    private void ApplyLegacyHide()
+    {
+        base.hide();
+    }
+
+    private RoomSeatInteractionRequest CreateSeatInteractionRequest()
+    {
+        return new RoomSeatInteractionRequest
+        {
+            SelfType = selftype,
+            SeatCount = realPlayers != null ? realPlayers.Length : 0,
+            IsPrepared = selftype < realPlayers.Length && realPlayers[selftype] != null && realPlayers[selftype].getIfPreped(),
+            SelectedDeckName = superScrollView != null ? superScrollView.selectedString : Config.Get("deckInUse", "wizard")
+        };
+    }
+
+    private RoomInteractionActions CreateRoomInteractionActions()
+    {
+        return new RoomInteractionActions
+        {
+            SendChat = delegate(string message)
+            {
+                TcpHelper.CtosMessage_Chat(message);
+            },
+            SetDeckInUse = delegate(string deckName)
+            {
+                Config.Set("deckInUse", deckName);
+            },
+            UpdateDeck = delegate(string deckPath)
+            {
+                TcpHelper.CtosMessage_UpdateDeck(new YGOSharp.Deck(deckPath));
+            },
+            SendReady = delegate
+            {
+                TcpHelper.CtosMessage_HsReady();
+            },
+            SendNotReady = delegate
+            {
+                TcpHelper.CtosMessage_HsNotReady();
+            },
+            MoveToDuelist = delegate
+            {
+                TcpHelper.CtosMessage_HsToDuelist();
+            },
+            MoveToObserver = delegate
+            {
+                TcpHelper.CtosMessage_HsToObserver();
+            },
+            StartDuel = delegate
+            {
+                TcpHelper.CtosMessage_HsStart();
+            },
+            KickPlayer = delegate(int position)
+            {
+                TcpHelper.CtosMessage_HsKick(position);
+            }
+        };
     }
 
     #endregion

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using App.Features.Duel.Services;
+using AppDuelScreenController = App.UI.Screens.Duel.DuelScreenController;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -6,6 +8,35 @@ using UnityEngine;
 using YGOSharp.OCGWrapper.Enums;
 public class Ocgcore : ServantWithCardDescription
 {
+    private DuelFlowService duelFlowService;
+    private AppDuelScreenController screenController;
+
+    private DuelFlowService DuelFlowService
+    {
+        get
+        {
+            if (duelFlowService == null)
+            {
+                duelFlowService = new DuelFlowService();
+            }
+
+            return duelFlowService;
+        }
+    }
+
+    private AppDuelScreenController ScreenController
+    {
+        get
+        {
+            if (screenController == null)
+            {
+                screenController = new AppDuelScreenController(DuelFlowService);
+            }
+
+            return screenController;
+        }
+    }
+
     public enum Condition
     {
         N=0,
@@ -405,6 +436,7 @@ public class Ocgcore : ServantWithCardDescription
             ).GetComponent<gameInfo>();
         gameInfo.ini();
         UIHelper.InterGameObject(gameInfo.gameObject);
+        ScreenController.Bind(gameInfo.gameObject, DuelFlowService, ApplyLegacyShow, ApplyLegacyHide);
         shiftCondition(Condition.duel);
 
         Program.go(1, () =>
@@ -475,6 +507,21 @@ public class Ocgcore : ServantWithCardDescription
                 break;
             default:
                 break;
+        }
+    }
+
+    private void ApplyResolvedSessionCondition()
+    {
+        Condition nextCondition;
+        if (DuelFlowService.TryResolveSessionCondition(
+                condition,
+                Condition.duel,
+                Condition.watch,
+                Condition.record,
+                isObserver,
+                out nextCondition))
+        {
+            shiftCondition(nextCondition);
         }
     }
 
@@ -757,34 +804,64 @@ public class Ocgcore : ServantWithCardDescription
     public Servant returnServant;
     public void returnTo()
     {
-        TcpHelper.SaveRecord();
-        if (Program.exitOnReturn && returnServant != Program.I().deckManager)
+        ScreenController.Close(new DuelCloseActions
         {
-            Program.I().menu.onClickExit();
-        }
-        else if (returnServant != null)
-        {
-            Program.I().shiftToServant(returnServant);
-        }
-        else
-        {
-            Program.I().shiftToServant(Program.I().selectServer);
-        }
+            ExitOnReturn = Program.exitOnReturn,
+            HasAssignedReturnTarget = returnServant != null,
+            ReturnTargetIsDeckManager = returnServant == Program.I().deckManager,
+            SaveRecord = TcpHelper.SaveRecord,
+            ShowAssignedReturnTarget = delegate
+            {
+                Program.I().shiftToServant(returnServant);
+            },
+            ShowServerSelect = delegate
+            {
+                Program.I().shiftToServant(Program.I().selectServer);
+            },
+            ExitApplication = delegate
+            {
+                Program.I().menu.onClickExit();
+            }
+        });
     }
 
     public void onExit()
     {
-        if (TcpHelper.tcpClient != null)
+        ScreenController.ExitLiveSession(new DuelLiveSessionExitActions
         {
-            if (TcpHelper.tcpClient.Connected)
+            ExitOnReturn = Program.exitOnReturn,
+            HasAssignedReturnTarget = returnServant != null,
+            ReturnTargetIsDeckManager = returnServant == Program.I().deckManager,
+            DisconnectSession = delegate
             {
-                TcpHelper.tcpClient.Client.Shutdown(0);
-                TcpHelper.tcpClient.Close();
+                if (TcpHelper.tcpClient != null)
+                {
+                    if (TcpHelper.tcpClient.Connected)
+                    {
+                        TcpHelper.tcpClient.Client.Shutdown(0);
+                        TcpHelper.tcpClient.Close();
+                    }
+                    TcpHelper.tcpClient = null;
+                }
+            },
+            StopAiServer = delegate
+            {
+                Program.I().aiRoom.killServerProcess();
+            },
+            SaveRecord = TcpHelper.SaveRecord,
+            ShowAssignedReturnTarget = delegate
+            {
+                Program.I().shiftToServant(returnServant);
+            },
+            ShowServerSelect = delegate
+            {
+                Program.I().shiftToServant(Program.I().selectServer);
+            },
+            ExitApplication = delegate
+            {
+                Program.I().menu.onClickExit();
             }
-            TcpHelper.tcpClient = null;
-        }
-        Program.I().aiRoom.killServerProcess();
-        returnTo();
+        });
     }
 
     public bool surrended = false;
@@ -2756,17 +2833,7 @@ public class Ocgcore : ServantWithCardDescription
         {
             try
             {
-                if (File.Exists("replay/" + TcpHelper.lastRecordName + ".yrp3d"))
-                {
-                    if (TcpHelper.lastRecordName != winCaculator.input.value)
-                    {
-                        if (File.Exists("replay/" + winCaculator.input.value + ".yrp3d"))
-                        {
-                            File.Delete("replay/" + winCaculator.input.value + ".yrp3d");
-                        }
-                    }
-                    File.Move("replay/" + TcpHelper.lastRecordName + ".yrp3d", "replay/" + winCaculator.input.value + ".yrp3d");
-                }
+                TcpHelper.MoveReplayFileIfExists(TcpHelper.lastRecordName, winCaculator.input.value, TcpHelper.lastRecordName != winCaculator.input.value);
                 TcpHelper.lastRecordName = "";
             }
             catch (Exception e)   
@@ -2783,14 +2850,7 @@ public class Ocgcore : ServantWithCardDescription
         {
             try
             {
-                if (File.Exists("replay/" + TcpHelper.lastRecordName + ".yrp3d"))
-                {
-                    if (File.Exists("replay/" + "-lastReplay" + ".yrp3d"))
-                    {
-                        File.Delete("replay/" + "-lastReplay" + ".yrp3d");
-                    }
-                    File.Move("replay/" + TcpHelper.lastRecordName + ".yrp3d", "replay/-lastReplay.yrp3d");
-                }
+                TcpHelper.MoveReplayFileIfExists(TcpHelper.lastRecordName, "-lastReplay", true);
             }
             catch (Exception e)
             {
@@ -2955,30 +3015,7 @@ public class Ocgcore : ServantWithCardDescription
                     gameField.loadOldField();
                 }
                 realize(true);
-                if (condition != Condition.record)
-                {
-                    if (isObserver)
-                    {
-                        if (condition != Condition.watch)
-                        {
-                            shiftCondition(Condition.watch);
-                        }
-                    }
-                    else
-                    {
-                        if (condition != Condition.duel)
-                        {
-                            shiftCondition(Condition.duel);
-                        }
-                    }
-                }
-                else
-                {
-                    if (condition != Condition.record)
-                    {
-                        shiftCondition(Condition.record);
-                    }
-                }
+                ApplyResolvedSessionCondition();
                 card = GCS_cardGet(new GPS
                 {
                     controller = (UInt32)0,
@@ -3003,30 +3040,7 @@ public class Ocgcore : ServantWithCardDescription
                     gameField.loadOldField();
                 }
                 realize(true);
-                if (condition != Condition.record)
-                {
-                    if (isObserver)
-                    {
-                        if (condition != Condition.watch)
-                        {
-                            shiftCondition(Condition.watch);
-                        }
-                    }
-                    else
-                    {
-                        if (condition != Condition.duel)
-                        {
-                            shiftCondition(Condition.duel);
-                        }
-                    }
-                }
-                else
-                {
-                    if (condition != Condition.record)
-                    {
-                        shiftCondition(Condition.record);
-                    }
-                }
+                ApplyResolvedSessionCondition();
 
                 card = GCS_cardGet(new GPS
                 {
@@ -8226,6 +8240,12 @@ public class Ocgcore : ServantWithCardDescription
 
     public override void show()
     {
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
+    }
+
+    private void ApplyLegacyShow()
+    {
         if (isShowed == true)
         {
             Menu.deleteShell();
@@ -8265,6 +8285,12 @@ public class Ocgcore : ServantWithCardDescription
     }
 
     public override void hide()
+    {
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
+    }
+
+    private void ApplyLegacyHide()
     {
         Program.I().cardDescription.shiftCardShower(true);
         InAI = false;
@@ -8980,39 +9006,46 @@ public class Ocgcore : ServantWithCardDescription
 
     public void onDuelResultConfirmed()
     {
-        Program.I().room.joinWithReconnect = false;
-
-        if (Program.I().room.duelEnded == true || surrended || TcpHelper.tcpClient == null || TcpHelper.tcpClient.Connected == false)
+        DuelFlowService.ConfirmDuelResult(new DuelResultConfirmationActions
         {
-            surrended = false;
-            Program.I().room.duelEnded = false;
-            Program.I().room.needSide = false;
-            Program.I().room.sideWaitingObserver = false;
-            onExit();
-            return;
-        }
+            DuelEnded = Program.I().room.duelEnded,
+            Surrendered = surrended,
+            HasConnectedSession = TcpHelper.tcpClient != null && TcpHelper.tcpClient.Connected,
+            NeedSide = Program.I().room.needSide,
+            IsDuelCondition = condition == Condition.duel,
+            ResetReconnectState = delegate
+            {
+                Program.I().room.joinWithReconnect = false;
+            },
+            ExitDuel = delegate
+            {
+                surrended = false;
+                Program.I().room.duelEnded = false;
+                Program.I().room.needSide = false;
+                Program.I().room.sideWaitingObserver = false;
+                onExit();
+            },
+            EnterSideDeck = EnterSideDeckChange,
+            HideCalculator = hideCaculator,
+            PromptSurrender = delegate
+            {
+                RMSshow_yesOrNoForce(InterString.Get("你确定要投降吗？"), new messageSystemValue { value = "yes", hint = "yes" }, new messageSystemValue { value = "no", hint = "no" });
+            }
+        });
+    }
 
-        if (Program.I().room.needSide == true)
-        {
-            Program.I().room.needSide = false;
-            RMSshow_none(InterString.Get("右侧为您准备了对手上一局使用的卡。"));
-            ((DeckManager)Program.I().deckManager).shiftCondition(DeckManager.Condition.changeSide);
-            returnTo();
-            ((DeckManager)Program.I().deckManager).deck = TcpHelper.deck;
-            ((DeckManager)Program.I().deckManager).FormCodedDeckToObjectDeck();
-            ((CardDescription)Program.I().cardDescription).setTitle(Config.Get("deckInUse", "miaowu"));
-            ((DeckManager)Program.I().deckManager).setGoodLooking(true);
-            ((DeckManager)Program.I().deckManager).returnAction = returnFromDeckEdit;
-            return;
-        }
-
-        if (condition != Condition.duel)
-        {
-            hideCaculator();
-            return;
-        }
-
-        RMSshow_yesOrNoForce(InterString.Get("你确定要投降吗？"), new messageSystemValue { value = "yes", hint = "yes" }, new messageSystemValue { value = "no", hint = "no" });
+    private void EnterSideDeckChange()
+    {
+        Program.I().room.needSide = false;
+        RMSshow_none(InterString.Get("右侧为您准备了对手上一局使用的卡。"));
+        DeckManager deckManager = (DeckManager)Program.I().deckManager;
+        deckManager.shiftCondition(DeckManager.Condition.changeSide);
+        returnTo();
+        deckManager.deck = TcpHelper.deck;
+        deckManager.FormCodedDeckToObjectDeck();
+        ((CardDescription)Program.I().cardDescription).setTitle(Config.Get("deckInUse", "miaowu"));
+        deckManager.setGoodLooking(true);
+        deckManager.returnAction = returnFromDeckEdit;
     }
 
     private void sendSorted()

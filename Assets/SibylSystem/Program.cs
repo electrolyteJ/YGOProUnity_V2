@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using App.RuntimeBridge;
+using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Text;
 
 public class Program : MonoBehaviour
 {
+    private const string CommandShellFileName = "commamd.shell";
 
     #region Resources
     public Camera main_camera;
@@ -143,6 +145,7 @@ public class Program : MonoBehaviour
     #region Initializement
 
     private static Program instance;
+    private static Action<Program, Action> StartupBridge = LegacyProgramBridge.Start;
 
     public static Program I()
     {
@@ -152,6 +155,53 @@ public class Program : MonoBehaviour
     public static int TimePassed()
     {
         return (int)(Time.time * 1000f);
+    }
+
+    internal static string GetCommandShellPath()
+    {
+        return RuntimePaths.GetProjectRootFilePath(CommandShellFileName);
+    }
+
+    internal static void EnsureCommandShellExists()
+    {
+        RuntimeTextFile.EnsureFileExists(GetCommandShellPath());
+    }
+
+    internal static string ReadCommandShell()
+    {
+        using (StreamReader reader = new StreamReader(GetCommandShellPath(), Encoding.UTF8))
+        {
+            return reader.ReadToEnd();
+        }
+    }
+
+    internal static void ClearCommandShell()
+    {
+        WriteCommandShellContents("");
+    }
+
+    internal static void DeleteCommandShell()
+    {
+        FileInfo shellFile = new FileInfo(GetCommandShellPath());
+        if (shellFile.Exists)
+        {
+            shellFile.Delete();
+        }
+    }
+
+    private static void WriteCommandShell(string command)
+    {
+        WriteCommandShellContents(command);
+        Program.exitOnReturn = true;
+    }
+
+    private static void WriteCommandShellContents(string command)
+    {
+        EnsureCommandShellExists();
+        using (StreamWriter writer = new StreamWriter(GetCommandShellPath(), false, Encoding.UTF8))
+        {
+            writer.Write(command);
+        }
     }
 
     private List<GameObject> allObjects = new List<GameObject>();
@@ -288,94 +338,96 @@ public class Program : MonoBehaviour
         });
         go(300, () =>
         {
-            InterString.initialize("config/translation.conf");
+            InterString.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Config, "translation.conf"));
             GameTextureManager.initialize();
-            Config.initialize("config/config.conf");
+            Config.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Config, "config.conf"));
 
-            if (!Directory.Exists("expansions"))
+            try
             {
-                try
-                {
-                    Directory.CreateDirectory("expansions");
-                }
-                catch
-                {
-                }
+                RuntimePaths.EnsureDirectory(RuntimeDirectory.Expansions);
+            }
+            catch
+            {
             }
 
-            if (!Directory.Exists("replay"))
+            try
             {
-                try
-                {
-                    Directory.CreateDirectory("replay");
-                }
-                catch
-                {
-                }
+                RuntimePaths.EnsureDirectory(RuntimeDirectory.Replay);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                RuntimePaths.EnsureDirectory(RuntimeDirectory.Deck);
+            }
+            catch
+            {
             }
 
             var fileInfos = new FileInfo[0];
 
-            if (Directory.Exists("expansions"))
+            if (RuntimePaths.DirectoryExists(RuntimeDirectory.Expansions))
             {
-                fileInfos = (new DirectoryInfo("expansions")).GetFiles();
+                fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Expansions);
                 foreach (FileInfo file in fileInfos)
                 {
                     if (file.Name.ToLower().EndsWith(".ypk"))
                     {
-                        GameZipManager.Zips.Add(new Ionic.Zip.ZipFile("expansions/" + file.Name));
+                        GameZipManager.Zips.Add(new Ionic.Zip.ZipFile(RuntimePaths.GetFilePath(RuntimeDirectory.Expansions, file.Name)));
                     }
                     if (file.Name.ToLower().EndsWith(".conf"))
                     {
-                        GameStringManager.initialize("expansions/" + file.Name);
+                        GameStringManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Expansions, file.Name));
                     }
                     if (file.Name.ToLower().EndsWith(".cdb"))
                     {
-                        YGOSharp.CardsManager.initialize("expansions/" + file.Name);
+                        YGOSharp.CardsManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Expansions, file.Name));
                     }
                 }
             }
 
-            if (Directory.Exists("cdb"))
+            if (RuntimePaths.DirectoryExists(RuntimeDirectory.Cdb))
             {
-                fileInfos = (new DirectoryInfo("cdb")).GetFiles();
+                fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Cdb);
                 foreach (FileInfo file in fileInfos)
                 {
                     if (file.Name.ToLower().EndsWith(".conf"))
                     {
-                        GameStringManager.initialize("cdb/" + file.Name);
+                        GameStringManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Cdb, file.Name));
                     }
                     if (file.Name.ToLower().EndsWith(".cdb"))
                     {
-                        YGOSharp.CardsManager.initialize("cdb/" + file.Name);
+                        YGOSharp.CardsManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Cdb, file.Name));
                     }
                 }
             }
 
-            if (Directory.Exists("diy"))
+            if (RuntimePaths.DirectoryExists(RuntimeDirectory.Diy))
             {
-                fileInfos = (new DirectoryInfo("diy")).GetFiles();
+                fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Diy);
                 foreach (FileInfo file in fileInfos)
                 {
                     if (file.Name.ToLower().EndsWith(".conf"))
                     {
-                        GameStringManager.initialize("diy/" + file.Name);
+                        GameStringManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Diy, file.Name));
                     }
                     if (file.Name.ToLower().EndsWith(".cdb"))
                     {
-                        YGOSharp.CardsManager.initialize("diy/" + file.Name, true);
+                        YGOSharp.CardsManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Diy, file.Name), true);
                     }
                 }
             }
 
-            if (Directory.Exists("data"))
+            if (RuntimePaths.DirectoryExists(RuntimeDirectory.Data))
             {
-                fileInfos = (new DirectoryInfo("data")).GetFiles();
+                fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Data);
                 foreach (FileInfo file in fileInfos)
                 {
                     if (file.Name.ToLower().EndsWith(".zip"))
                     {
-                        GameZipManager.Zips.Add(new Ionic.Zip.ZipFile("data/" + file.Name));
+                        GameZipManager.Zips.Add(new Ionic.Zip.ZipFile(RuntimePaths.GetFilePath(RuntimeDirectory.Data, file.Name)));
                     }
                 }
             }
@@ -404,19 +456,19 @@ public class Program : MonoBehaviour
                 }
             }
 
-            GameStringManager.initialize("config/strings.conf");
-            YGOSharp.BanlistManager.initialize("config/lflist.conf");
+            GameStringManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Config, "strings.conf"));
+            YGOSharp.BanlistManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Config, "lflist.conf"));
 
             YGOSharp.CardsManager.updateSetNames();
 
-            if (Directory.Exists("pack"))
+            if (RuntimePaths.DirectoryExists(RuntimeDirectory.Pack))
             {
-                fileInfos = (new DirectoryInfo("pack")).GetFiles();
+                fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Pack);
                 foreach (FileInfo file in fileInfos)
                 {
                     if (file.Name.ToLower().EndsWith(".db"))
                     {
-                        YGOSharp.PacksManager.initialize("pack/" + file.Name);
+                        YGOSharp.PacksManager.initialize(RuntimePaths.GetFilePath(RuntimeDirectory.Pack, file.Name));
                     }
                 }
                 YGOSharp.PacksManager.initializeSec();
@@ -486,26 +538,21 @@ public class Program : MonoBehaviour
                 Config.Set("deckInUse", deck);
             }
         }
-        string cmdFile = "commamd.shell";
         if (join)
         {
-            File.WriteAllText(cmdFile, "online " + nick + " " + host + " " + port + " 0x233 " + password, Encoding.UTF8);
-            Program.exitOnReturn = true;
+            WriteCommandShell("online " + nick + " " + host + " " + port + " 0x233 " + password);
         }
         else if (deck != null)
         {
-            File.WriteAllText(cmdFile, "edit " + deck, Encoding.UTF8);
-            Program.exitOnReturn = true;
+            WriteCommandShell("edit " + deck);
         }
         else if (replay != null)
         {
-            File.WriteAllText(cmdFile, "replay " + replay, Encoding.UTF8);
-            Program.exitOnReturn = true;
+            WriteCommandShell("replay " + replay);
         }
         else if (puzzle != null)
         {
-            File.WriteAllText(cmdFile, "puzzle " + puzzle, Encoding.UTF8);
-            Program.exitOnReturn = true;
+            WriteCommandShell("puzzle " + puzzle);
         }
     }
 
@@ -860,20 +907,6 @@ public class Program : MonoBehaviour
         }
     }
 
-    public static Texture2D GetTextureViaPath(string path)
-    {
-        FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read);
-        file.Seek(0, SeekOrigin.Begin);
-        byte[] data = new byte[file.Length];
-        file.Read(data, 0, (int)file.Length);
-        file.Close();
-        file.Dispose();
-        file = null;
-        Texture2D pic = new Texture2D(1024, 600);
-        pic.LoadImage(data);
-        return pic;
-    }
-
     #endregion
 
     #region Servants
@@ -988,20 +1021,8 @@ public class Program : MonoBehaviour
 
     void Start()
     {
-        if (Screen.width < 100 || Screen.height < 100)
-        {
-            Screen.SetResolution(1300, 700, false);
-        }
-        QualitySettings.vSyncCount = 0;
-        Application.targetFrameRate = 144;
-        mouseParticle = Instantiate(new_mouse);
         instance = this;
-        RuntimeArchiveBootstrap.EnsureRequiredDirectories(delegate (string message)
-        {
-            Debug.Log(message);
-        });
-        initialize();
-        go(500, () => { gameStart(); });
+        StartupBridge(this, initialize);
     }
 
     int preWid = 0;
@@ -1126,6 +1147,11 @@ public class Program : MonoBehaviour
         }
         backGroundPic.show();
         shiftToServant(menu);
+    }
+
+    internal void RunGameStartFromBridge()
+    {
+        gameStart();
     }
 
     public static bool Running = true;

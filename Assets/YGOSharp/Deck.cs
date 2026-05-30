@@ -25,7 +25,7 @@ namespace YGOSharp
             public IList<int> Side = new List<int>();
         }
 
-        public Deck()
+        private void InitializeCollections()
         {
             Main = new List<int>();
             Extra = new List<int>();
@@ -37,79 +37,45 @@ namespace YGOSharp
             ISide = new List<MonoCardInDeckManager>();
         }
 
-        public Deck(string path)
+        public Deck()
         {
-            Main = new List<int>();
-            Extra = new List<int>();
-            Side = new List<int>();
-            Deck_O = new D();
-            IMain = new List<MonoCardInDeckManager>();
-            IExtra = new List<MonoCardInDeckManager>();
-            IRemoved = new List<MonoCardInDeckManager>();
-            ISide = new List<MonoCardInDeckManager>();
+            InitializeCollections();
+        }
+
+        public Deck(string path)
+            : this()
+        {
             try
             {
-                string text = System.IO.File.ReadAllText(path);
-                string st = text.Replace("\r", "");
-                string[] lines = st.Split(new string[] { "\n" }, StringSplitOptions.RemoveEmptyEntries);
-                int flag = -1;
-                foreach (string line in lines)
-                {
-                    if (line == "#main")
-                    {
-                        flag = 1;
-                    }
-                    else if (line == "#extra")
-                    {
-                        flag = 2;
-                    }
-                    else if (line == "!side")
-                    {
-                        flag = 3;
-                    }
-                    else
-                    {
-                        int code = 0;
-                        try
-                        {
-                            code = Int32.Parse(line);
-                        }
-                        catch (Exception)
-                        {
-
-                        }
-                        if (code > 100)
-                        {
-                            switch (flag)
-                            {
-                                case 1:
-                                    {
-                                        this.Main.Add(code);
-                                        this.Deck_O.Main.Add(code);
-                                    }
-                                    break;
-                                case 2:
-                                    {
-                                        this.Extra.Add(code);
-                                        this.Deck_O.Extra.Add(code);
-                                    }
-                                    break;
-                                case 3:
-                                    {
-                                        this.Side.Add(code);
-                                        this.Deck_O.Side.Add(code);
-                                    }
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-                    }
-                }
+                CopyFrom(YdkDeckImporter.LoadDeck(path, false));
             }
             catch (System.Exception e)
             {
                 UnityEngine.Debug.Log(e);
+            }
+        }
+
+        private void CopyFrom(Deck source)
+        {
+            if (source == null)
+            {
+                return;
+            }
+
+            CopyCards(source.Main, Main);
+            CopyCards(source.Extra, Extra);
+            CopyCards(source.Side, Side);
+            CopyCards(source.Deck_O.Main, Deck_O.Main);
+            CopyCards(source.Deck_O.Extra, Deck_O.Extra);
+            CopyCards(source.Deck_O.Side, Deck_O.Side);
+        }
+
+        private static void CopyCards(IList<int> source, IList<int> destination)
+        {
+            destination.Clear();
+            for (int index = 0; index < source.Count; index++)
+            {
+                destination.Add(source[index]);
             }
         }
 

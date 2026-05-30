@@ -4,13 +4,22 @@ using Ionic.Zip;
 
 public static class RuntimeArchiveBootstrap
 {
-    private const string ArchiveDirectoryName = "runtime-zips";
     private const string StampFileName = ".archive-stamp";
 
     public static void EnsureRequiredDirectories(Action<string> log)
     {
-        EnsureExtracted(Environment.CurrentDirectory, "picture", log);
-        EnsureExtracted(Environment.CurrentDirectory, "script", log);
+        EnsureExtracted(RuntimePaths.ProjectRoot, RuntimeDirectory.Picture, log);
+        EnsureExtracted(RuntimePaths.ProjectRoot, RuntimeDirectory.Script, log);
+    }
+
+    public static void EnsureExtracted(string rootPath, RuntimeDirectory directoryName)
+    {
+        EnsureExtracted(rootPath, directoryName, null);
+    }
+
+    public static void EnsureExtracted(string rootPath, RuntimeDirectory directoryName, Action<string> log)
+    {
+        EnsureExtracted(rootPath, RuntimePaths.GetDirectoryName(directoryName), log);
     }
 
     public static void EnsureExtracted(string rootPath, string directoryName)
@@ -20,30 +29,18 @@ public static class RuntimeArchiveBootstrap
 
     public static void EnsureExtracted(string rootPath, string directoryName, Action<string> log)
     {
-        string archivePath = Path.Combine(rootPath, ArchiveDirectoryName, directoryName + ".zip");
-        string destinationPath = Path.Combine(rootPath, directoryName);
+        string archivePath = GetArchivePath(rootPath, directoryName);
 
         if (!File.Exists(archivePath))
         {
             return;
         }
 
+        string destinationPath = GetDestinationPath(rootPath, directoryName);
         string archiveStamp = BuildArchiveStamp(archivePath);
-        string stampPath = Path.Combine(destinationPath, StampFileName);
-
-        if (Directory.Exists(destinationPath))
+        if (TryUseExistingDirectory(destinationPath, archiveStamp))
         {
-            if (!File.Exists(stampPath))
-            {
-                WriteStamp(destinationPath, archiveStamp);
-                return;
-            }
-
-            string currentStamp = File.ReadAllText(stampPath);
-            if (currentStamp == archiveStamp)
-            {
-                return;
-            }
+            return;
         }
 
         ReplaceDirectoryFromArchive(archivePath, destinationPath, archiveStamp, log);
@@ -125,10 +122,42 @@ public static class RuntimeArchiveBootstrap
         return info.Length.ToString() + ":" + info.LastWriteTimeUtc.Ticks.ToString();
     }
 
+    private static string GetArchivePath(string rootPath, string directoryName)
+    {
+        return Path.Combine(rootPath, RuntimePaths.GetDirectoryName(RuntimeDirectory.RuntimeZips), directoryName + ".zip");
+    }
+
+    private static string GetDestinationPath(string rootPath, string directoryName)
+    {
+        return Path.Combine(rootPath, directoryName);
+    }
+
+    private static string GetStampPath(string destinationPath)
+    {
+        return Path.Combine(destinationPath, StampFileName);
+    }
+
+    private static bool TryUseExistingDirectory(string destinationPath, string archiveStamp)
+    {
+        if (!Directory.Exists(destinationPath))
+        {
+            return false;
+        }
+
+        string stampPath = GetStampPath(destinationPath);
+        if (!File.Exists(stampPath))
+        {
+            WriteStamp(destinationPath, archiveStamp);
+            return true;
+        }
+
+        return File.ReadAllText(stampPath) == archiveStamp;
+    }
+
     private static void WriteStamp(string destinationPath, string archiveStamp)
     {
         Directory.CreateDirectory(destinationPath);
-        File.WriteAllText(Path.Combine(destinationPath, StampFileName), archiveStamp);
+        File.WriteAllText(GetStampPath(destinationPath), archiveStamp);
     }
 
     private static void DeleteDirectoryIfExists(string path)

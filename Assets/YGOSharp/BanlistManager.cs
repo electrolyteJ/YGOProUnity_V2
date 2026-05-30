@@ -11,14 +11,10 @@ namespace YGOSharp
         {
             Banlists = new List<Banlist>();
             Banlist current = null;
-            StreamReader reader = new StreamReader(fileName);
-            while (!reader.EndOfStream)
+            foreach (string line in File.ReadLines(fileName))
             {
-                string line = reader.ReadLine();
                 try
                 {
-                    if (line == null)
-                        continue;
                     if (line.StartsWith("#"))
                         continue;
                     if (line.StartsWith("!"))

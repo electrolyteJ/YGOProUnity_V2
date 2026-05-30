@@ -1,21 +1,16 @@
 ﻿using UnityEngine;
 using System;
-using System.IO;
 public class BackGroundPic : Servant
 {
     GameObject backGround;
     public override void initialize()
     {
         backGround = create(Program.I().mod_simple_ngui_background_texture, Vector3.zero, Vector3.zero, false, Program.ui_back_ground_2d);
-        FileStream file = new FileStream("texture/common/desk.jpg", FileMode.Open, FileAccess.Read);
-        file.Seek(0, SeekOrigin.Begin);
-        byte[] data = new byte[file.Length];
-        file.Read(data, 0, (int)file.Length);
-        file.Close();
-        file.Dispose();
-        file = null;
-        Texture2D pic = new Texture2D(1024, 600);
-        pic.LoadImage(data);
+        Texture2D pic = RuntimeTextureLoader.Load(RuntimeDirectory.Texture, "common", "desk.jpg");
+        if (pic == null)
+        {
+            pic = RuntimeTextureLoader.Load(RuntimePaths.GetProjectRootFilePath("Assets", "Content", "Backgrounds", "desk.jpg"));
+        }
         backGround.GetComponent<UITexture>().mainTexture = pic;
         backGround.GetComponent<UITexture>().depth = -100;
     }

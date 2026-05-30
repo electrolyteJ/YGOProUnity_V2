@@ -1,25 +1,52 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.RegularExpressions;
+using App.Features.Deck.Services;
+using AppDeckScreenController = App.UI.Screens.Deck.DeckScreenController;
 using UnityEngine;
 using YGOSharp.OCGWrapper.Enums;
 
 public class selectDeck : WindowServantSP
 {
-
     UIselectableList superScrollView = null;
     UIInput searchInput = null;
     UIDeckPanel deckPanel = null;
 
     string sort = "sortByTimeDeck";
-
+    private DeckFlowService flowService;
+    private AppDeckScreenController screenController;
 
     cardPicLoader[] quickCards = new cardPicLoader[200];
+
+    private DeckFlowService FlowService
+    {
+        get
+        {
+            if (flowService == null)
+            {
+                flowService = DeckLegacyBindings.CreateFlowService();
+            }
+
+            return flowService;
+        }
+    }
+
+    private AppDeckScreenController ScreenController
+    {
+        get
+        {
+            if (screenController == null)
+            {
+                screenController = new AppDeckScreenController(FlowService);
+            }
+
+            return screenController;
+        }
+    }
 
     public override void initialize()
     {
         createWindow(Program.I().remaster_deckManager);
+        ScreenController.Bind(gameObject, FlowService, ApplyLegacyShow, ApplyLegacyHide);
         deckPanel = gameObject.GetComponentInChildren<UIDeckPanel>();
         UIHelper.registEvent(gameObject, "exit_", onClickExit);
         superScrollView = gameObject.GetComponentInChildren<UIselectableList>();
@@ -82,32 +109,9 @@ public class selectDeck : WindowServantSP
 
     public void KF_editDeck(string deckName)
     {
-        string path = "deck/" + deckName + ".ydk";
-        if (File.Exists(path))
+        if (ScreenController.TryOpenEditor(deckName, CreateDeckEditorOpenActions()))
         {
-            Config.Set("deckInUse", deckName);
-            ((DeckManager)Program.I().deckManager).shiftCondition(DeckManager.Condition.editDeck);
-            Program.I().shiftToServant(Program.I().deckManager);
-            ((DeckManager)Program.I().deckManager).loadDeckFromYDK(path);
-            ((CardDescription)Program.I().cardDescription).setTitle(deckName);
-            ((DeckManager)Program.I().deckManager).setGoodLooking();
-            ((DeckManager)Program.I().deckManager).returnAction =
-                () =>
-                {
-                    if (((DeckManager)Program.I().deckManager).deckDirty)
-                    {
-                    RMSshow_yesOrNoOrCancle(
-                          "deckManager_returnAction"
-                        , InterString.Get("要保存卡组的变更吗？")
-                        , new messageSystemValue { hint = "yes", value = "yes" }
-                        , new messageSystemValue { hint = "no", value = "no" }
-                        , new messageSystemValue { hint = "cancle", value = "cancle" }
-                        );
-                    }
-                    else {
-                        returnToSelect();
-                    }
-                };
+            return;
         }
     }
 
@@ -116,23 +120,13 @@ public class selectDeck : WindowServantSP
         base.ES_RMS(hashCode, result);
         if (hashCode == "deckManager_returnAction")
         {
-            if (result[0].value == "yes")
-            {
-                if (Program.I().deckManager.onSave())
-                {
-                    returnToSelect();
-                }
-            }
-            if (result[0].value == "no")
-            {
-                returnToSelect();
-            }
+            ScreenController.HandleReturnDialogResult(result[0].value, CreateDeckEditorReturnActions());
         }
         if (hashCode == "onNew")
         {
             try
             {
-                File.Create("deck/" + result[0].value + ".ydk").Close();
+                ScreenController.CreateDeck(result[0].value);
                 RMSshow_none(InterString.Get("「[?]」创建完毕。", result[0].value));
                 superScrollView.selectedString = result[0].value;
                 printFile();
@@ -148,7 +142,7 @@ public class selectDeck : WindowServantSP
             {
                 try
                 {
-                    File.Delete("deck/" + superScrollView.selectedString + ".ydk");
+                    ScreenController.DeleteDeck(superScrollView.selectedString);
                     RMSshow_none(InterString.Get("「[?]」删除完毕。", superScrollView.selectedString));
                     printFile();
                 }
@@ -162,7 +156,7 @@ public class selectDeck : WindowServantSP
         {
             try
             {
-                File.Copy("deck/" + superScrollView.selectedString + ".ydk", "deck/" + result[0].value + ".ydk");
+                ScreenController.CopyDeck(superScrollView.selectedString, result[0].value);
                 RMSshow_none(InterString.Get("「[?]」复制完毕。", superScrollView.selectedString));
                 superScrollView.selectedString = result[0].value;
                 printFile();
@@ -176,7 +170,7 @@ public class selectDeck : WindowServantSP
         {
             try
             {
-                File.Move("deck/" + superScrollView.selectedString + ".ydk", "deck/" + result[0].value + ".ydk");
+                ScreenController.RenameDeck(superScrollView.selectedString, result[0].value);
                 RMSshow_none(InterString.Get("「[?]」重命名完毕。", superScrollView.selectedString));
                 superScrollView.selectedString = result[0].value;
                 printFile();
@@ -199,8 +193,7 @@ public class selectDeck : WindowServantSP
         {
             return;
         }
-        string path = "deck/" + superScrollView.selectedString + ".ydk";
-        if (File.Exists(path))
+        if (ScreenController.DeckExists(superScrollView.selectedString))
         {
             RMSshow_yesOrNo(
                           "onDispose"
@@ -217,17 +210,10 @@ public class selectDeck : WindowServantSP
         {
             return;
         }
-        string path = "deck/" + superScrollView.selectedString + ".ydk";
-        if (File.Exists(path))
+        if (ScreenController.DeckExists(superScrollView.selectedString))
         {
             string newname = InterString.Get("[?]的副本", superScrollView.selectedString);
-            string newnamer = newname;
-            int i = 1;
-            while (File.Exists("deck/" + newnamer + ".ydk"))
-            {
-                newnamer = newname + i.ToString();
-                i++;
-            }
+            string newnamer = ScreenController.GetUniqueDeckName(newname);
             RMSshow_input("onCopy", InterString.Get("请输入复制后的卡组名"), newnamer);
         }
     }
@@ -238,8 +224,7 @@ public class selectDeck : WindowServantSP
         {
             return;
         }
-        string path = "deck/" + superScrollView.selectedString + ".ydk";
-        if (File.Exists(path))
+        if (ScreenController.DeckExists(superScrollView.selectedString))
         {
             RMSshow_input("onRename", InterString.Get("新的卡组名"), superScrollView.selectedString);
         }
@@ -251,9 +236,9 @@ public class selectDeck : WindowServantSP
         {
             return;
         }
-        string path = "deck/" + superScrollView.selectedString + ".ydk";
-        if (File.Exists(path))
+        if (ScreenController.DeckExists(superScrollView.selectedString))
         {
+            string path = ScreenController.GetDeckPath(superScrollView.selectedString);
             try
             {
                 #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
@@ -275,7 +260,7 @@ public class selectDeck : WindowServantSP
 
     private void setSortLable()
     {
-        if (Config.Get(sort,"1") == "1")
+        if (ReadSortMode() == DeckSortMode.ByTime)
         {
             UIHelper.trySetLableText(gameObject, "sort_", InterString.Get("时间排序"));
         }
@@ -287,18 +272,10 @@ public class selectDeck : WindowServantSP
 
     private void onSort()
     {
-        if (Config.Get(sort,"1") == "1")
-        {
-            Config.Set(sort, "0");
-        }
-        else
-        {
-            Config.Set(sort, "1");
-        }
+        Config.Set(sort, DeckLegacyBindings.WriteSortMode(DeckLegacyBindings.ToggleSortMode(ReadSortMode())));
         setSortLable();
         printFile();
     }
-
 
     string deckSelected = "";
     void onSelected()
@@ -315,7 +292,7 @@ public class selectDeck : WindowServantSP
     {
         GameTextureManager.clearUnloaded();
         YGOSharp.Deck deck;
-        DeckManager.FromYDKtoCodedDeck("deck/" + deckSelected + ".ydk", out deck);
+        DeckManager.FromYDKtoCodedDeck(ScreenController.GetDeckPath(deckSelected), out deck);
         int mainAll = 0;
         int mainMonster = 0;
         int mainSpell = 0;
@@ -449,70 +426,28 @@ public class selectDeck : WindowServantSP
 
     public override void show()
     {
-        base.show();
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
         printFile();
         superScrollView.toTop();
         superScrollView.selectedString = Config.Get("deckInUse", "miaowu");
         printSelected();
-        Program.charge();
     }
 
     public override void hide()
     {
-        if (isShowed)
-        {
-            if (superScrollView.Selected())
-            {
-                Config.Set("deckInUse", superScrollView.selectedString);
-            }
-        }
-        base.hide();    
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
     }
 
     void printFile()
     {
-        string deckInUse = Config.Get("deckInUse","miaowu");
+        string deckInUse = Config.Get("deckInUse", "miaowu");
         superScrollView.clear();
-        FileInfo[] fileInfos = (new DirectoryInfo("deck")).GetFiles();
-        if (Config.Get(sort,"1") == "1")
+        string[] deckNames = ScreenController.GetDeckNames(deckInUse, searchInput.value, ReadSortMode());
+        for (int index = 0; index < deckNames.Length; index++)
         {
-            Array.Sort(fileInfos, UIHelper.CompareTime);
-        }
-        else
-        {
-            Array.Sort(fileInfos, UIHelper.CompareName);
-        }
-        for (int i = 0; i < fileInfos.Length; i++)
-        {
-            if (fileInfos[i].Name.Length > 4)
-            {
-                if (fileInfos[i].Name.Substring(fileInfos[i].Name.Length - 4, 4) == ".ydk")
-                {
-                    if (fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4) == deckInUse)
-                    {
-                        if (searchInput.value == "" || Regex.Replace(fileInfos[i].Name, searchInput.value, "miaowu", RegexOptions.IgnoreCase) != fileInfos[i].Name)
-                        {
-                            superScrollView.add(fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4));
-                        }
-                    }
-                }
-            }
-        }
-        for (int i = 0; i < fileInfos.Length; i++)
-        {
-            if (fileInfos[i].Name.Length > 4)
-            {
-                if (fileInfos[i].Name.Substring(fileInfos[i].Name.Length - 4, 4) == ".ydk")
-                {
-                    if (fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4) != deckInUse)
-                    {
-                        if (searchInput.value == "" || Regex.Replace(fileInfos[i].Name, searchInput.value, "miaowu", RegexOptions.IgnoreCase) != fileInfos[i].Name)
-                        {
-                            superScrollView.add(fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4));
-                        }
-                    }
-                }
-            }
+            superScrollView.add(deckNames[index]);
         }
         if (superScrollView.Selected() == false)
         {
@@ -522,10 +457,67 @@ public class selectDeck : WindowServantSP
 
     void onClickExit()
     {
-        if (Program.exitOnReturn)
-            Program.I().menu.onClickExit();
-        else
-            Program.I().shiftToServant(Program.I().menu);
+        ScreenController.Close(new DeckCloseActions
+        {
+            ExitOnReturn = Program.exitOnReturn,
+            ShowMenu = delegate { Program.I().shiftToServant(Program.I().menu); },
+            ExitApplication = delegate { Program.I().menu.onClickExit(); }
+        });
+    }
+
+    private DeckSortMode ReadSortMode()
+    {
+        return DeckLegacyBindings.ReadSortMode(Config.Get(sort, "1"));
+    }
+
+    private void ApplyLegacyShow()
+    {
+        base.show();
+        Program.charge();
+    }
+
+    private void ApplyLegacyHide()
+    {
+        if (isShowed && superScrollView != null && superScrollView.Selected())
+        {
+            Config.Set("deckInUse", superScrollView.selectedString);
+        }
+
+        base.hide();
+    }
+
+    private DeckEditorOpenActions CreateDeckEditorOpenActions()
+    {
+        return new DeckEditorOpenActions
+        {
+            SetDeckInUse = delegate(string deckName) { Config.Set("deckInUse", deckName); },
+            EnterEditMode = delegate { ((DeckManager)Program.I().deckManager).shiftCondition(DeckManager.Condition.editDeck); },
+            ShowEditor = delegate { Program.I().shiftToServant(Program.I().deckManager); },
+            LoadDeck = delegate(string deckName) { ((DeckManager)Program.I().deckManager).loadDeck(deckName); },
+            SetTitle = delegate(string deckName) { ((CardDescription)Program.I().cardDescription).setTitle(deckName); },
+            ApplyLayout = delegate { ((DeckManager)Program.I().deckManager).setGoodLooking(); },
+            SetReturnAction = delegate(Action returnAction) { ((DeckManager)Program.I().deckManager).returnAction = returnAction; },
+            ReturnActions = CreateDeckEditorReturnActions()
+        };
+    }
+
+    private DeckEditorReturnActions CreateDeckEditorReturnActions()
+    {
+        return new DeckEditorReturnActions
+        {
+            HasUnsavedChanges = delegate { return ((DeckManager)Program.I().deckManager).deckDirty; },
+            SaveChanges = delegate { return Program.I().deckManager.onSave(); },
+            ShowSavePrompt = delegate
+            {
+                RMSshow_yesOrNoOrCancle(
+                    "deckManager_returnAction",
+                    InterString.Get("要保存卡组的变更吗？"),
+                    new messageSystemValue { hint = "yes", value = "yes" },
+                    new messageSystemValue { hint = "no", value = "no" },
+                    new messageSystemValue { hint = "cancle", value = "cancle" });
+            },
+            ReturnToDeckList = returnToSelect
+        };
     }
 
 }

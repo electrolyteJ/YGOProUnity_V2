@@ -1,0 +1,17 @@
+{
+  "name": "App.Platform",
+  "rootNamespace": "",
+  "references": [
+    "App.Core",
+    "SibylSystem.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

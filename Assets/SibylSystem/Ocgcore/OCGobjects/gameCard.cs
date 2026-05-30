@@ -2246,6 +2246,11 @@ public class gameCard : OCGobject
                             ));
     }
 
+    private bool HasCloseupPicture()
+    {
+        return GameTextureManager.HasCloseupPicture(data.Id);
+    }
+
     public void animation_show_off(bool summon, bool disabled = false)   
     {
         if (Ocgcore.inSkiping) 
@@ -2262,30 +2267,34 @@ public class gameCard : OCGobject
             refreshFunctions.Add(SOH_dis);
             Program.I().ocgcore.Sleep(42);
         }
-        else if (show_off_shokewave)
-        {
-            if (Program.I().setting.setting.showoff.value == false || File.Exists("picture/closeup/" + data.Id.ToString() + ".png") == false || (data.Attack < Program.I().setting.atk && data.Level < Program.I().setting.star))
-            {
-                refreshFunctions.Add(SOH_nSum);
-                Program.I().ocgcore.Sleep(30);
-            }
-            else
-            {
-                refreshFunctions.Add(SOH_sum);
-                Program.I().ocgcore.Sleep(72);
-            }
-        }
         else
         {
-            if (Program.I().setting.setting.showoffWhenActived.value == false || File.Exists("picture/closeup/" + data.Id.ToString() + ".png") == false)
+            bool hasCloseupPicture = HasCloseupPicture();
+            if (show_off_shokewave)
             {
-                refreshFunctions.Add(SOH_nAct);
-                Program.I().ocgcore.Sleep(42);
+                if (Program.I().setting.setting.showoff.value == false || hasCloseupPicture == false || (data.Attack < Program.I().setting.atk && data.Level < Program.I().setting.star))
+                {
+                    refreshFunctions.Add(SOH_nSum);
+                    Program.I().ocgcore.Sleep(30);
+                }
+                else
+                {
+                    refreshFunctions.Add(SOH_sum);
+                    Program.I().ocgcore.Sleep(72);
+                }
             }
             else
             {
-                refreshFunctions.Add(SOH_act);
-                Program.I().ocgcore.Sleep(42);
+                if (Program.I().setting.setting.showoffWhenActived.value == false || hasCloseupPicture == false)
+                {
+                    refreshFunctions.Add(SOH_nAct);
+                    Program.I().ocgcore.Sleep(42);
+                }
+                else
+                {
+                    refreshFunctions.Add(SOH_act);
+                    Program.I().ocgcore.Sleep(42);
+                }
             }
         }
     }

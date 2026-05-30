@@ -1,9 +1,9 @@
-﻿using UnityEngine;
+﻿using App.Features.Online.Services;
+using AppSelectServerScreenController = App.UI.Screens.Online.SelectServerScreenController;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
-using System.Text.RegularExpressions;
 
 public class SelectServer : WindowServantSP
 {
@@ -15,10 +15,53 @@ public class SelectServer : WindowServantSP
     UIInput inputVersion;
 
     public string name = "";
+    private OnlineFlowService flowService;
+    private OnlineSessionFlowService sessionFlowService;
+    private AppSelectServerScreenController screenController;
+
+    private OnlineFlowService FlowService
+    {
+        get
+        {
+            if (flowService == null)
+            {
+                flowService = new OnlineFlowService();
+            }
+
+            return flowService;
+        }
+    }
+
+    private AppSelectServerScreenController ScreenController
+    {
+        get
+        {
+            if (screenController == null)
+            {
+                screenController = new AppSelectServerScreenController(FlowService);
+            }
+
+            return screenController;
+        }
+    }
+
+    private OnlineSessionFlowService SessionFlowService
+    {
+        get
+        {
+            if (sessionFlowService == null)
+            {
+                sessionFlowService = new OnlineSessionFlowService();
+            }
+
+            return sessionFlowService;
+        }
+    }
 
     public override void initialize()
     {
         createWindow(Program.I().new_ui_selectServer);
+        ScreenController.Bind(gameObject, FlowService, ApplyLegacyShow, ApplyLegacyHide);
         UIHelper.registEvent(gameObject, "exit_", onClickExit);
         UIHelper.registEvent(gameObject, "face_", onClickFace);
         UIHelper.registEvent(gameObject, "join_", onClickJoin);
@@ -44,39 +87,36 @@ public class SelectServer : WindowServantSP
 
     private void readString(string str)
     {
-        string remain = "";
-        string ip = "", port = "", psw = "";
-        string[] splited;
-        splited = str.Split(":");
-        try
-        {
-            ip = splited[0];
-            remain = splited[1];
-        }
-        catch (Exception)
-        {
-        }
-        splited = remain.Split(" ");
-        try
-        {
-            port = splited[0];
-            psw = splited[1];
-        }
-        catch (Exception)
-        {
-        }
-        inputIP.value = ip;
-        inputPort.value = port;
-        inputPsw.value = psw;
+        OnlineHistorySelection selection = ScreenController.ParseHistoryEntry(str);
+        inputIP.value = selection.Host ?? string.Empty;
+        inputPort.value = selection.Port ?? string.Empty;
+        inputPsw.value = selection.Password ?? string.Empty;
     }
 
     public override void show()
     {
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
+    }
+
+    public override void hide()
+    {
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
+    }
+
+    private void ApplyLegacyShow()
+    {
         base.show();
         Program.I().room.RMSshow_clear();
-        printFile(true);
+        printFile();
         Program.charge();
         Program.I().ocgcore.returnServant = Program.I().selectServer;
+    }
+
+    private void ApplyLegacyHide()
+    {
+        base.hide();
     }
 
     public override void preFrameFunction()
@@ -85,50 +125,37 @@ public class SelectServer : WindowServantSP
         Menu.checkCommend();
     }
 
-    void printFile(bool first)
+    void printFile()
     {
         list.Clear();
-        if (File.Exists("config/hosts.conf") == false)
+        OnlineHistoryState historyState = ScreenController.LoadHistory();
+        for (int i = 0; i < historyState.Entries.Count; i++)
         {
-            File.Create("config/hosts.conf").Close();
+            list.AddItem(historyState.Entries[i]);
         }
-        string txtString = File.ReadAllText("config/hosts.conf");
-        string[] lines = txtString.Replace("\r", "").Split("\n");
-        for (int i = 0; i < lines.Length; i++)
+
+        if (historyState.Entries.Count > 0)
         {
-            lines[i] = Regex.Replace(lines[i], "^\\(.*\\)", ""); // remove old version
-            if (i == 0)
-            {
-                if (first)
-                {
-                    readString(lines[i]);
-                }
-            }
-            list.AddItem(lines[i]);
+            inputIP.value = historyState.SelectedHost ?? string.Empty;
+            inputPort.value = historyState.SelectedPort ?? string.Empty;
+            inputPsw.value = historyState.SelectedPassword ?? string.Empty;
         }
     }
 
     void onClickExit()
     {
-        if (Program.exitOnReturn)
-            Program.I().menu.onClickExit();
-        else
-            Program.I().shiftToServant(Program.I().menu);
-        if (TcpHelper.tcpClient != null)
+        UninstallSessionHandlers();
+        ScreenController.Close(new OnlineCloseActions
         {
-            if (TcpHelper.tcpClient.Connected)
-            {
-                TcpHelper.tcpClient.Close();
-            }
-        }
+            ExitOnReturn = Program.exitOnReturn,
+            ExitApplication = delegate { Program.I().menu.onClickExit(); },
+            ShowMenu = delegate { Program.I().shiftToServant(Program.I().menu); },
+            CloseConnection = CloseTcpConnection
+        });
     }
 
     void onClickJoin()
     {
-        if (!isShowed)
-        {
-            return;
-        }
         string Name = UIHelper.getByName<UIInput>(gameObject, "name_").value;
         string ipString = UIHelper.getByName<UIInput>(gameObject, "ip_").value;
         string portString = UIHelper.getByName<UIInput>(gameObject, "port_").value;
@@ -141,36 +168,44 @@ public class SelectServer : WindowServantSP
     {
         name = Name;
         Config.Set("name", name);
-        if (ipString == "" || portString == "")
+        OnlineJoinResult result = ScreenController.PrepareJoin(new OnlineJoinRequest
         {
-            RMSshow_onlyYes("", InterString.Get("非法输入！请检查输入的主机名。"), null);
-        }
-        else
+            IsVisible = isShowed,
+            PlayerName = name,
+            Host = ipString,
+            Port = portString,
+            Version = versionString,
+            Password = pswString,
+            ExistingHistory = list != null ? list.items : new List<string>()
+        });
+
+        if (!string.IsNullOrEmpty(result.ErrorMessage))
         {
-            if (name != "")
-            {
-                string fantasty = ipString + ":" + portString + " " + pswString;
-                list.items.Remove(fantasty);
-                list.items.Insert(0, fantasty);
-                list.value = fantasty;
-                if (list.items.Count>5) 
-                {
-                    list.items.RemoveAt(list.items.Count - 1);
-                }
-                string all = "";
-                for (int i = 0; i < list.items.Count; i++)
-                {
-                    all += list.items[i] + "\r\n";
-                }
-                File.WriteAllText("config/hosts.conf", all);
-                printFile(false);
-                (new Thread(() => { TcpHelper.join(ipString, name, portString, pswString,versionString); })).Start();
-            }
-            else
-            {
-                RMSshow_onlyYes("", InterString.Get("昵称不能为空。"), null);
-            }
+            RMSshow_onlyYes("", InterString.Get(result.ErrorMessage), null);
+            return;
         }
+
+        if (!result.ShouldConnect || result.Connection == null)
+        {
+            return;
+        }
+
+        InstallSessionHandlers();
+        list.items.Clear();
+        for (int index = 0; index < result.UpdatedHistory.Count; index++)
+        {
+            list.items.Add(result.UpdatedHistory[index]);
+        }
+
+        string selectedHistory = result.UpdatedHistory.Count > 0 ? result.UpdatedHistory[0] : string.Empty;
+        if (!string.IsNullOrEmpty(selectedHistory))
+        {
+            list.value = selectedHistory;
+        }
+
+        printFile();
+        OnlineConnectRequest connection = result.Connection;
+        (new Thread(() => { TcpHelper.join(connection.Host, connection.PlayerName, connection.Port, connection.Password, connection.Version); })).Start();
     }
 
     GameObject faceShow = null;
@@ -180,6 +215,66 @@ public class SelectServer : WindowServantSP
         name = UIHelper.getByName<UIInput>(gameObject, "name_").value;
         RMSshow_face("showFace", name);
         Config.Set("name", name);
+    }
+
+    private static void CloseTcpConnection()
+    {
+        if (TcpHelper.tcpClient != null && TcpHelper.tcpClient.Connected)
+        {
+            TcpHelper.tcpClient.Close();
+        }
+    }
+
+    private void InstallSessionHandlers()
+    {
+        TcpHelper.SetStocMessageDispatcher(DispatchSessionMessage);
+        TcpHelper.SetDisconnectHandler(HandleSessionDisconnect);
+    }
+
+    private void UninstallSessionHandlers()
+    {
+        TcpHelper.SetStocMessageDispatcher(null);
+        TcpHelper.SetDisconnectHandler(null);
+    }
+
+    private bool DispatchSessionMessage(YGOSharp.Network.Enums.StocMessage message, System.IO.BinaryReader reader)
+    {
+        return SessionFlowService.TryDispatch((int)message, reader, new OnlineSessionDispatchActions
+        {
+            DispatchRoomMessage = delegate(int messageCode, System.IO.BinaryReader packetReader)
+            {
+                return LegacyTcpDispatchBridge.DispatchRoomMessage((YGOSharp.Network.Enums.StocMessage)messageCode, packetReader);
+            },
+            DispatchDuelMessage = delegate(int messageCode, System.IO.BinaryReader packetReader)
+            {
+                return LegacyTcpDispatchBridge.DispatchDuelMessage((YGOSharp.Network.Enums.StocMessage)messageCode, packetReader);
+            }
+        });
+    }
+
+    private bool HandleSessionDisconnect()
+    {
+        try
+        {
+            return SessionFlowService.HandleDisconnected(new OnlineSessionDisconnectRequest
+            {
+                IsDuelVisible = Program.I().ocgcore.isShowed,
+                IsMenuVisible = Program.I().menu.isShowed,
+                HasAssignedReturnTarget = Program.I().ocgcore.returnServant != null
+            }, new OnlineSessionDisconnectActions
+            {
+                ReturnToAssignedTarget = delegate { Program.I().shiftToServant(Program.I().ocgcore.returnServant); },
+                ReturnToSelectServer = delegate { Program.I().shiftToServant(Program.I().selectServer); },
+                ShowDisconnectedMessage = delegate { Program.I().cardDescription.RMSshow_none(InterString.Get("连接被断开。")); },
+                ShowOpponentLeftMessage = delegate { Program.I().cardDescription.RMSshow_none(InterString.Get("对方离开游戏，您现在可以截图。")); },
+                ClearReplayRecordBuffer = delegate { TcpHelper.packagesInRecord.Clear(); },
+                ForceQuitDuel = delegate { Program.I().ocgcore.forceMSquit(); }
+            });
+        }
+        finally
+        {
+            UninstallSessionHandlers();
+        }
     }
 
 }

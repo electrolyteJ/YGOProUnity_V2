@@ -27,6 +27,10 @@ namespace YGOSharp
             nullString += "[url=https://ygopro2.lofter.com/][u]https://ygopro2.lofter.com/[/u][/url]";
             nullString += "\r\n\r\n";
             nullString += "公测玩家交流群：\r\n[url=https://jq.qq.com/?_wv=1027&k=O1xapcRQ][u]966380039[/u][/url]";
+            Card.ExactLookup = GetCard;
+            Card.UnknownName = nullName;
+            Card.UnknownDesc = nullString;
+            Banlist.AliasLookup = GetAlias;
             using (SqliteConnection connection = new SqliteConnection("Data Source=" + databaseFullPath))
             {
                 connection.Open();
@@ -77,6 +81,11 @@ namespace YGOSharp
                 }
             }
             return returnValue;
+        }
+
+        private static int GetAlias(int id)
+        {
+            return Get(id).Alias;
         }
 
         private static void LoadCard(IDataRecord reader, bool replace)

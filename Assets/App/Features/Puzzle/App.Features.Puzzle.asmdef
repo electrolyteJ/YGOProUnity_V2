@@ -1,0 +1,17 @@
+{
+  "name": "App.Features.Puzzle",
+  "rootNamespace": "",
+  "references": [
+    "App.Core",
+    "App.Platform"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

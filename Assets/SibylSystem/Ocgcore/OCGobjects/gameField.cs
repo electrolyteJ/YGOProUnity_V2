@@ -131,21 +131,34 @@ public class GameField : OCGobject
         loadNewField();
     }
 
+    void setBlankFieldTextures()
+    {
+        leftT.mainTexture = new Texture2D(100, 100);
+        midT.mainTexture = new Texture2D(100, 100);
+        rightT.mainTexture = new Texture2D(100, 100);
+    }
+
+    bool tryLoadFieldTexture(string fileName)
+    {
+        string fieldPath = RuntimePaths.GetFilePath(RuntimeDirectory.Texture, "duel", fileName);
+        if (!(new FileInfo(fieldPath)).Exists)
+        {
+            return false;
+        }
+
+        Texture2D textureField = UIHelper.getTexture2D(RuntimeDirectory.Texture, "duel", fileName);
+        Texture2D[] textureFieldSliced = UIHelper.sliceField(textureField);
+        leftT.mainTexture = textureFieldSliced[0];
+        midT.mainTexture = textureFieldSliced[1];
+        rightT.mainTexture = textureFieldSliced[2];
+        return true;
+    }
+
     public void loadOldField()
     {
-        if (File.Exists("texture/duel/field.png"))
+        if (!tryLoadFieldTexture("field.png"))
         {
-            Texture2D textureField = UIHelper.getTexture2D("texture/duel/field.png");
-            Texture2D[] textureFieldSliced = UIHelper.sliceField(textureField);
-            leftT.mainTexture = textureFieldSliced[0];
-            midT.mainTexture = textureFieldSliced[1];
-            rightT.mainTexture = textureFieldSliced[2];
-        }
-        else
-        {
-            leftT.mainTexture = new Texture2D(100, 100);
-            midT.mainTexture = new Texture2D(100, 100);
-            rightT.mainTexture = new Texture2D(100, 100);
+            setBlankFieldTextures();
         }
         phaseTexure.mainTexture = GameTextureManager.phase;
         gameObject.GetComponentInChildren<lazyBTNMOVER>().shift(false);
@@ -153,19 +166,9 @@ public class GameField : OCGobject
 
     public void loadNewField()
     {
-        if (File.Exists("texture/duel/newfield.png"))
+        if (!tryLoadFieldTexture("newfield.png"))
         {
-            Texture2D textureField = UIHelper.getTexture2D("texture/duel/newfield.png");
-            Texture2D[] textureFieldSliced = UIHelper.sliceField(textureField);
-            leftT.mainTexture = textureFieldSliced[0];
-            midT.mainTexture = textureFieldSliced[1];
-            rightT.mainTexture = textureFieldSliced[2];
-        }
-        else
-        {
-            leftT.mainTexture = new Texture2D(100, 100);
-            midT.mainTexture = new Texture2D(100, 100);
-            rightT.mainTexture = new Texture2D(100, 100);
+            setBlankFieldTextures();
         }
         phaseTexure.mainTexture = null;
         gameObject.GetComponentInChildren<lazyBTNMOVER>().shift(true);
@@ -449,11 +452,11 @@ public class GameField : OCGobject
                         }
                         if (tex == null)
                         {
-                            tex = UIHelper.getTexture2D("picture/field/" + code.ToString() + ".png");
+                            tex = UIHelper.getTexture2D(RuntimeDirectory.Picture, "field", code.ToString() + ".png");
                         }
                         if (tex == null)
                         {
-                            tex = UIHelper.getTexture2D("picture/field/" + code.ToString() + ".jpg");
+                            tex = UIHelper.getTexture2D(RuntimeDirectory.Picture, "field", code.ToString() + ".jpg");
                         }
                         if (tex != null)
                         {

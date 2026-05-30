@@ -1,0 +1,17 @@
+{
+  "name": "App.Features.Online",
+  "rootNamespace": "",
+  "references": [
+    "App.Core",
+    "App.Platform"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -12,6 +12,26 @@ using System.Runtime.InteropServices;
 ///  https://stackoverflow.com/a/9164742/386091 </remarks>
 public static class ChildProcessTracker
 {
+    public static bool TryAddProcess(Process process)
+    {
+        if (process == null)
+        {
+            return false;
+        }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        if (s_jobHandle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        AddProcess(process);
+        return true;
+#else
+        return false;
+#endif
+    }
+
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
     /// <summary>
     /// Add the process to be tracked. If our current process is killed, the child processes

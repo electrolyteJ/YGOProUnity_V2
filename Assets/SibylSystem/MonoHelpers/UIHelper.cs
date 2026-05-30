@@ -108,6 +108,11 @@ public static class UIHelper
         return fromStringToBool(Config.Get("maximize_", "0"));
     }
 
+    public static Texture2D getTexture2D(RuntimeDirectory directory, params string[] segments)
+    {
+        return RuntimeTextureLoader.Load(directory, segments);
+    }
+
     public enum RenderingMode
     {
         Opaque,
@@ -177,66 +182,12 @@ public static class UIHelper
 
     internal static Texture2D[] sliceField(Texture2D textureField_) 
     {
-        Texture2D textureField = ScaleTexture(textureField_,1024,819);
-        Texture2D[] returnValue = new Texture2D[3];
-        returnValue[0] = new Texture2D(textureField.width, textureField.height);
-        returnValue[1] = new Texture2D(textureField.width, textureField.height);
-        returnValue[2] = new Texture2D(textureField.width, textureField.height);
-        float zuo = (float)textureField.width * 69f / 320f;
-        float you = (float)textureField.width * 247f / 320f;
-        for (int w = 0; w < textureField.width; w++)
-        {
-            for (int h = 0; h < textureField.height; h++)
-            {
-                Color c = textureField.GetPixel(w, h);
-                if (c.a < 0.05f)
-                {
-                    c.a = 0;
-                }
-                if (w < zuo)
-                {
-                    returnValue[0].SetPixel(w, h, c);
-                    returnValue[1].SetPixel(w, h, new Color(0, 0, 0, 0));
-                    returnValue[2].SetPixel(w, h, new Color(0, 0, 0, 0));
-                }
-                else if (w > you)
-                {
-                    returnValue[2].SetPixel(w, h, c);
-                    returnValue[0].SetPixel(w, h, new Color(0, 0, 0, 0));
-                    returnValue[1].SetPixel(w, h, new Color(0, 0, 0, 0));
-                }
-                else
-                {
-                    returnValue[1].SetPixel(w, h, c);
-                    returnValue[0].SetPixel(w, h, new Color(0, 0, 0, 0));
-                    returnValue[2].SetPixel(w, h, new Color(0, 0, 0, 0));
-                }
-            }
-        }
-        returnValue[0].Apply();
-        returnValue[1].Apply();
-        returnValue[2].Apply();
-        return returnValue;
+        return RuntimeTextureTools.SliceField(textureField_);
     }
 
     static Texture2D ScaleTexture(Texture2D source, int targetWidth, int targetHeight)
     {
-        Texture2D result = new Texture2D(targetWidth, targetHeight, source.format, false);
-
-        float incX = (1.0f / (float)targetWidth);
-        float incY = (1.0f / (float)targetHeight);
-
-        for (int i = 0; i < result.height; ++i)
-        {
-            for (int j = 0; j < result.width; ++j)
-            {
-                Color newColor = source.GetPixelBilinear((float)j / (float)result.width, (float)i / (float)result.height);
-                result.SetPixel(j, i, newColor);
-            }
-        }
-
-        result.Apply();
-        return result;
+        return RuntimeTextureTools.Scale(source, targetWidth, targetHeight);
     }
 
     public static T getByName<T>(GameObject father,string name) where T:Component
@@ -778,29 +729,37 @@ public static class UIHelper
 
     public static Dictionary<string, Texture2D> faces = new Dictionary<string, Texture2D>();
 
+    private static bool TryGetFaceName(FileInfo fileInfo, out string faceName)
+    {
+        string fileName = fileInfo.Name;
+        if (fileName.Length <= 4 || Path.GetExtension(fileName) != ".png")
+        {
+            faceName = null;
+            return false;
+        }
+
+        faceName = Path.GetFileNameWithoutExtension(fileName);
+        return true;
+    }
+
     internal static void iniFaces()
     {
         try
         {
-            FileInfo[] fileInfos = (new DirectoryInfo("texture/face")).GetFiles();
+            string faceDirectoryName = "face";
+            FileInfo[] fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Texture, faceDirectoryName);
             for (int i = 0; i < fileInfos.Length; i++)
             {
-                if (fileInfos[i].Name.Length > 4)
+                string name;
+                if (TryGetFaceName(fileInfos[i], out name) && !faces.ContainsKey(name))
                 {
-                    if (fileInfos[i].Name.Substring(fileInfos[i].Name.Length - 4, 4) == ".png")
+                    try
                     {
-                        string name = fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4);
-                        if (!faces.ContainsKey(name))
-                        {
-                            try
-                            {
-                                faces.Add(name, UIHelper.getTexture2D("texture/face/" + fileInfos[i].Name));
-                            }
-                            catch (Exception e)
-                            {
-                                Debug.Log(e);
-                            }
-                        }
+                        faces.Add(name, UIHelper.getTexture2D(RuntimeDirectory.Texture, faceDirectoryName, fileInfos[i].Name));
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.Log(e);
                     }
                 }
             }
@@ -833,28 +792,7 @@ public static class UIHelper
 
     public static Texture2D getTexture2D(string path) 
     {
-        Texture2D pic = null;
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
-            FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read);
-            file.Seek(0, SeekOrigin.Begin);
-            byte[] data = new byte[file.Length];
-            file.Read(data, 0, (int)file.Length);
-            file.Close();
-            file.Dispose();
-            file = null;
-            pic = new Texture2D(1024, 600);
-            pic.LoadImage(data);
-        }
-        catch (Exception e)
-        {
-            Debug.Log(e);
-        }
-        return pic;
+        return RuntimeTextureLoader.Load(path);
     }
 
 
@@ -989,27 +927,38 @@ public static class UIHelper
         return xInfo.FullName.CompareTo(yInfo.FullName);
     }
 
-    internal static void playSound(string p, float val) 
+    static string GetSoundPath(string soundName)
     {
-        if (Ocgcore.inSkiping) 
+        string[] candidatePaths =
+        {
+            RuntimePaths.GetFilePath(RuntimeDirectory.Sound, soundName + ".mp3"),
+            RuntimePaths.GetFilePath(RuntimeDirectory.Sound, soundName + ".wav"),
+            RuntimePaths.GetFilePath(RuntimeDirectory.Sound, soundName + ".ogg"),
+        };
+
+        for (int i = 0; i < candidatePaths.Length; i++)
+        {
+            if ((new FileInfo(candidatePaths[i])).Exists)
+            {
+                return candidatePaths[i];
+            }
+        }
+
+        return null;
+    }
+
+    internal static void playSound(string p, float val)
+    {
+        if (Ocgcore.inSkiping)
         {
             return;
         }
-        string path = "sound/" + p + ".mp3";
-        if (File.Exists(path) == false)
-        {
-            path = "sound/" + p + ".wav";
-        }
-        if (File.Exists(path) == false)
-        {
-            path = "sound/" + p + ".ogg";
-        }
-        if (File.Exists(path) == false)
+        string path = GetSoundPath(p);
+        if (path == null)
         {
             return;
         }
-        path = Environment.CurrentDirectory.Replace("\\", "/") + "/" + path;
-        path = "file:///" + path;
+        path = new Uri(path).AbsoluteUri;
         GameObject audio_helper = Program.I().ocgcore.create_s(Program.I().mod_audio_effect);
         audio_helper.GetComponent<audio_helper>().play(path, Program.I().setting.soundValue());
         Program.I().destroy(audio_helper,5f);

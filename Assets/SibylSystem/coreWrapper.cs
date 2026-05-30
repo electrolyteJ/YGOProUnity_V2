@@ -439,60 +439,10 @@ namespace Percy
             Deck deck = new Deck();
             try
             {
-                string text = System.IO.File.ReadAllText(path);
-                string st = text.Replace("\r", "");
-                string[] lines = st.Split(new string[] { "\n" }, StringSplitOptions.RemoveEmptyEntries);
-                int flag = -1;
-                foreach (string line in lines)
-                {
-                    if (line == "#main")
-                    {
-                        flag = 1;
-                    }
-                    else if (line == "#extra")
-                    {
-                        flag = 2;
-                    }
-                    else if (line == "!side")
-                    {
-                        flag = 3;
-                    }
-                    else
-                    {
-                        int code = 0;
-                        try
-                        {
-                            code = Int32.Parse(line);
-                        }
-                        catch (Exception)
-                        {
-
-                        }
-                        if (code > 100)
-                        {
-                            switch (flag)
-                            {
-                                case 1:
-                                    {
-                                        deck.Main.Add(code);
-                                    }
-                                    break;
-                                case 2:
-                                    {
-                                        deck.Extra.Add(code);
-                                    }
-                                    break;
-                                case 3:
-                                    {
-                                        deck.Side.Add(code);
-                                    }
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-                    }
-                }
+                YGOSharp.DeckLoadResult loadedDeck = YGOSharp.YdkDeckImporter.LoadDeckData(path);
+                deck.Main.AddRange(loadedDeck.Main);
+                deck.Extra.AddRange(loadedDeck.Extra);
+                deck.Side.AddRange(loadedDeck.Side);
             }
             catch (Exception e)
             {

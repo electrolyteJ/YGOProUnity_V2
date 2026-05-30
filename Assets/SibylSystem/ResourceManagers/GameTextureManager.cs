@@ -225,6 +225,130 @@ public class GameTextureManager
 
     public static Texture2D ts = null;
 
+    static string TextureFile(params string[] segments)
+    {
+        return RuntimePaths.GetFilePath(RuntimeDirectory.Texture, segments);
+    }
+
+    static string ContentFile(string contentDirectory, params string[] segments)
+    {
+        string[] parts = new string[segments.Length + 3];
+        parts[0] = "Assets";
+        parts[1] = "Content";
+        parts[2] = contentDirectory;
+        for (int index = 0; index < segments.Length; index++)
+        {
+            parts[index + 3] = segments[index];
+        }
+
+        return RuntimePaths.GetProjectRootFilePath(parts);
+    }
+
+    static string PictureFile(params string[] segments)
+    {
+        return RuntimePaths.GetFilePath(RuntimeDirectory.Picture, segments);
+    }
+
+    static bool IsPngFile(FileInfo fileInfo)
+    {
+        return fileInfo.Name.Length > 4 && Path.GetExtension(fileInfo.Name) == ".png";
+    }
+
+    static Texture2D LoadUiTexture(string fileName)
+    {
+        return RuntimeTextureLoader.Load(RuntimeDirectory.Texture, "ui", fileName);
+    }
+
+    static Texture2D LoadContentTexture(string contentDirectory, params string[] segments)
+    {
+        return RuntimeTextureLoader.Load(ContentFile(contentDirectory, segments));
+    }
+
+    static Texture2D LoadRuntimeOrContentTexture(string contentDirectory, string[] runtimeSegments, params string[] contentSegments)
+    {
+        Texture2D texture = RuntimeTextureLoader.Load(RuntimeDirectory.Texture, runtimeSegments);
+        if (texture != null)
+        {
+            return texture;
+        }
+
+        return LoadContentTexture(contentDirectory, contentSegments);
+    }
+
+    static void AddUiTextureIfMissing(string name, Texture2D texture)
+    {
+        if (texture == null || string.IsNullOrEmpty(name))
+        {
+            return;
+        }
+
+        for (int index = 0; index < allUI.size; index++)
+        {
+            if (allUI[index].name == name)
+            {
+                return;
+            }
+        }
+
+        UIPictureResource resource = new UIPictureResource();
+        resource.name = name;
+        resource.data = texture;
+        allUI.Add(resource);
+    }
+
+    static bool RuntimeFileExists(string path)
+    {
+        return new FileInfo(path).Exists;
+    }
+
+    static string GetCloseupPicturePath(string code)
+    {
+        string closeupPath = PictureFile("closeup", code + ".png");
+        if (RuntimeFileExists(closeupPath))
+        {
+            return closeupPath;
+        }
+
+        return null;
+    }
+
+    static string GetCardPicturePath(string code, out bool EightEdition)
+    {
+        string path = PictureFile("card", code + ".png");
+        if (RuntimeFileExists(path))
+        {
+            EightEdition = false;
+            return path;
+        }
+
+        path = PictureFile("card", code + ".jpg");
+        if (RuntimeFileExists(path))
+        {
+            EightEdition = false;
+            return path;
+        }
+
+        EightEdition = true;
+        path = PictureFile("cardIn8thEdition", code + ".png");
+        if (RuntimeFileExists(path))
+        {
+            return path;
+        }
+
+        path = PictureFile("cardIn8thEdition", code + ".jpg");
+        if (RuntimeFileExists(path))
+        {
+            return path;
+        }
+
+        return null;
+    }
+
+    public static bool HasCloseupPicture(long code)
+    {
+        return GetCloseupPicturePath(code.ToString()) != null;
+    }
+
     static void thread_run()
     {
         while (Program.Running)
@@ -323,10 +447,10 @@ public class GameTextureManager
         }
         if (!found)
         {
-            string path = "picture/closeup/" + code + ".png";
-            if (File.Exists(path))
+            string closeupPath = GetCloseupPicturePath(code);
+            if (closeupPath != null)
             {
-                bitmap = new BitmapHelper(path);
+                bitmap = new BitmapHelper(closeupPath);
             }
         }
         return bitmap;
@@ -351,22 +475,8 @@ public class GameTextureManager
                 }
             }
         }
-        string path = "picture/card/" + code + ".png";
-        if (!File.Exists(path))
-        {
-            path = "picture/card/" + code + ".jpg";
-        }
-        if (!File.Exists(path))
-        {
-            EightEdition = true;
-            path = "picture/cardIn8thEdition/" + code + ".png";
-        }
-        if (!File.Exists(path))
-        {
-            EightEdition = true;
-            path = "picture/cardIn8thEdition/" + code + ".jpg";
-        }
-        if (File.Exists(path))
+        string path = GetCardPicturePath(code, out EightEdition);
+        if (path != null)
         {
             using (FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
@@ -907,18 +1017,27 @@ public class GameTextureManager
         if (uiLoaded == false)
         {
             uiLoaded = true;
-            FileInfo[] fileInfos = (new DirectoryInfo("texture/ui")).GetFiles();
+            FileInfo[] fileInfos = RuntimePaths.GetFiles(RuntimeDirectory.Texture, "ui");
             for (int i = 0; i < fileInfos.Length; i++)
             {
-                if (fileInfos[i].Name.Length > 4)
+                if (IsPngFile(fileInfos[i]))
                 {
-                    if (fileInfos[i].Name.Substring(fileInfos[i].Name.Length - 4, 4) == ".png")
-                    {
-                        UIPictureResource r = new UIPictureResource();
-                        r.name = fileInfos[i].Name.Substring(0, fileInfos[i].Name.Length - 4);
-                        r.data = UIHelper.getTexture2D("texture/ui/" + fileInfos[i].Name);
-                        allUI.Add(r);
-                    }
+                    UIPictureResource r = new UIPictureResource();
+                    r.name = Path.GetFileNameWithoutExtension(fileInfos[i].Name);
+                    r.data = LoadUiTexture(fileInfos[i].Name);
+                    allUI.Add(r);
+                }
+            }
+
+            string contentUiPath = ContentFile("UI");
+            if (Directory.Exists(contentUiPath))
+            {
+                FileInfo[] contentFiles = new DirectoryInfo(contentUiPath).GetFiles("*.png", SearchOption.AllDirectories);
+                for (int index = 0; index < contentFiles.Length; index++)
+                {
+                    AddUiTextureIfMissing(
+                        Path.GetFileNameWithoutExtension(contentFiles[index].Name),
+                        RuntimeTextureLoader.Load(contentFiles[index].FullName));
                 }
             }
         }
@@ -941,35 +1060,35 @@ public class GameTextureManager
 
     internal static void initialize()
     {
-        attack = UIHelper.getTexture2D("texture/duel/attack.png");
-        myBack = UIHelper.getTexture2D("texture/duel/me.jpg");
-        opBack = UIHelper.getTexture2D("texture/duel/opponent.jpg");
-        unknown = UIHelper.getTexture2D("texture/duel/unknown.jpg");
-        negated = UIHelper.getTexture2D("texture/duel/negated.png");
-        bar = UIHelper.getTexture2D("texture/duel/healthBar/bg.png");
-        exBar = UIHelper.getTexture2D("texture/duel/healthBar/excited.png");
-        time = UIHelper.getTexture2D("texture/duel/healthBar/t.png");
-        lp = UIHelper.getTexture2D("texture/duel/healthBar/lp.png");
-        L = UIHelper.getTexture2D("texture/duel/L.png");
-        R = UIHelper.getTexture2D("texture/duel/R.png");
-        LINK = UIHelper.getTexture2D("texture/duel/link.png");
-        LINKm = UIHelper.getTexture2D("texture/duel/linkMask.png");
-        Chain = UIHelper.getTexture2D("texture/duel/chain.png");
-        Mask = UIHelper.getTexture2D("texture/duel/mask.png");
+        attack = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "attack.png" }, "Duel", "attack.png");
+        myBack = LoadRuntimeOrContentTexture("Backgrounds", new string[] { "duel", "me.jpg" }, "Duel", "me.jpg");
+        opBack = LoadRuntimeOrContentTexture("Backgrounds", new string[] { "duel", "opponent.jpg" }, "Duel", "opponent.jpg");
+        unknown = LoadRuntimeOrContentTexture("Backgrounds", new string[] { "duel", "unknown.jpg" }, "Duel", "unknown.jpg");
+        negated = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "negated.png" }, "Duel", "negated.png");
+        bar = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "healthBar", "bg.png" }, "Duel", "healthBar", "bg.png");
+        exBar = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "healthBar", "excited.png" }, "Duel", "healthBar", "excited.png");
+        time = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "healthBar", "t.png" }, "Duel", "healthBar", "t.png");
+        lp = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "healthBar", "lp.png" }, "Duel", "healthBar", "lp.png");
+        L = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "L.png" }, "Duel", "L.png");
+        R = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "R.png" }, "Duel", "R.png");
+        LINK = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "link.png" }, "Duel", "link.png");
+        LINKm = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "linkMask.png" }, "Duel", "linkMask.png");
+        Chain = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "chain.png" }, "Duel", "chain.png");
+        Mask = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "mask.png" }, "Duel", "mask.png");
 
 
-        nt = UIHelper.getTexture2D("texture/duel/phase/nt.png");
-        bp = UIHelper.getTexture2D("texture/duel/phase/bp.png");
-        ep = UIHelper.getTexture2D("texture/duel/phase/ep.png");
-        mp1 = UIHelper.getTexture2D("texture/duel/phase/mp1.png");
-        mp2 = UIHelper.getTexture2D("texture/duel/phase/mp2.png");
-        dp = UIHelper.getTexture2D("texture/duel/phase/dp.png");
-        sp = UIHelper.getTexture2D("texture/duel/phase/sp.png");
+        nt = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "nt.png" }, "Duel", "phase", "nt.png");
+        bp = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "bp.png" }, "Duel", "phase", "bp.png");
+        ep = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "ep.png" }, "Duel", "phase", "ep.png");
+        mp1 = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "mp1.png" }, "Duel", "phase", "mp1.png");
+        mp2 = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "mp2.png" }, "Duel", "phase", "mp2.png");
+        dp = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "dp.png" }, "Duel", "phase", "dp.png");
+        sp = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "sp.png" }, "Duel", "phase", "sp.png");
 
-        phase = UIHelper.getTexture2D("texture/duel/phase/phase.png");
+        phase = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "phase.png" }, "Duel", "phase", "phase.png");
 
-        rs = UIHelper.getTexture2D("texture/duel/phase/rs.png");
-        ts = UIHelper.getTexture2D("texture/duel/phase/ts.png");
+        rs = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "rs.png" }, "Duel", "phase", "rs.png");
+        ts = LoadRuntimeOrContentTexture("UI", new string[] { "duel", "phase", "ts.png" }, "Duel", "phase", "ts.png");
 
         N = new Texture2D(10,10);
         for (int i = 0; i < 10; i++)    
@@ -982,7 +1101,7 @@ public class GameTextureManager
         N.Apply();
         try
         {
-            ColorUtility.TryParseHtmlString(File.ReadAllText("texture/duel/chainColor.txt"), out chainColor);
+            ColorUtility.TryParseHtmlString(RuntimeTextFile.ReadAllText(TextureFile("duel", "chainColor.txt")), out chainColor);
         }
         catch (Exception)   
         {
@@ -992,4 +1111,3 @@ public class GameTextureManager
         main.Start();
     }
 }
-

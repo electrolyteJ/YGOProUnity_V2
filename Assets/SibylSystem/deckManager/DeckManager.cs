@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
+using App.Features.Deck.Services;
 using UnityEngine;
 using YGOSharp.OCGWrapper.Enums;
 public class DeckManager : ServantWithCardDescription
@@ -44,6 +44,21 @@ public class DeckManager : ServantWithCardDescription
     SuperScrollView superScrollView = null;
 
     UIPopupList UIPopupList_banlist;
+
+    private DeckFlowService flowService;
+
+    private DeckFlowService FlowService
+    {
+        get
+        {
+            if (flowService == null)
+            {
+                flowService = DeckLegacyBindings.CreateFlowService();
+            }
+
+            return flowService;
+        }
+    }
 
     public override void initialize()
     {
@@ -208,13 +223,7 @@ public class DeckManager : ServantWithCardDescription
     {
         string deckName = Config.Get("deckInUse", "miaowu");
         string newname = InterString.Get("[?]的副本", deckName);
-        string newnamer = newname;
-        int i = 1;
-        while (File.Exists("deck/" + newnamer + ".ydk"))
-        {
-            newnamer = newname + i.ToString();
-            i++;
-        }
+        string newnamer = FlowService.GetUniqueDeckName(newname);
         RMSshow_input("onRename", InterString.Get("新的卡组名"), newnamer);
     }
 
@@ -242,64 +251,58 @@ public class DeckManager : ServantWithCardDescription
     {
         try
         {
-            if (
-           deck.IMain.Count <= 60
-           &&
-           deck.IExtra.Count <= 15
-           &&
-           deck.ISide.Count <= 15
-           )
+            string deckInUse = Config.Get("deckInUse", "miaowu");
+            IList<int> main;
+            IList<int> extra;
+            IList<int> side;
+            int mainCount;
+            int extraCount;
+            int sideCount;
+            if (canSave)
             {
-                string deckInUse = Config.Get("deckInUse", "miaowu");
-                if (canSave)
-                {
-                    ArrangeObjectDeck();
-                    FromObjectDeckToCodedDeck(true);
-                    string value = "#created by ygopro2\r\n#main\r\n";
-                    for (int i = 0; i < deck.Main.Count; i++)
-                    {
-                        value += deck.Main[i].ToString() + "\r\n";
-                    }
-                    value += "#extra\r\n";
-                    for (int i = 0; i < deck.Extra.Count; i++)
-                    {
-                        value += deck.Extra[i].ToString() + "\r\n";
-                    }
-                    value += "!side\r\n";
-                    for (int i = 0; i < deck.Side.Count; i++)
-                    {
-                        value += deck.Side[i].ToString() + "\r\n";
-                    }
-                    System.IO.File.WriteAllText("deck/" + deckInUse + ".ydk", value, System.Text.Encoding.UTF8);
-                }
-                else
-                {
-                    string value = "#created by ygopro2\r\n#main\r\n";
-                    for (int i = 0; i < deck.Deck_O.Main.Count; i++)
-                    {
-                        value += deck.Deck_O.Main[i].ToString() + "\r\n";
-                    }
-                    value += "#extra\r\n";
-                    for (int i = 0; i < deck.Deck_O.Extra.Count; i++)
-                    {
-                        value += deck.Deck_O.Extra[i].ToString() + "\r\n";
-                    }
-                    value += "!side\r\n";
-                    for (int i = 0; i < deck.Deck_O.Side.Count; i++)
-                    {
-                        value += deck.Deck_O.Side[i].ToString() + "\r\n";
-                    }
-                    System.IO.File.WriteAllText("deck/" + deckInUse + ".ydk", value, System.Text.Encoding.UTF8);
-                }
-                deckDirty = false;
-                RMSshow_none(InterString.Get("卡组[?]已经被保存。", deckInUse));
-                return true;
+                ArrangeObjectDeck();
+                FromObjectDeckToCodedDeck(true);
+                main = deck.Main;
+                extra = deck.Extra;
+                side = deck.Side;
+                mainCount = deck.IMain.Count;
+                extraCount = deck.IExtra.Count;
+                sideCount = deck.ISide.Count;
             }
             else
+            {
+                main = deck.Deck_O.Main;
+                extra = deck.Deck_O.Extra;
+                side = deck.Deck_O.Side;
+                mainCount = main.Count;
+                extraCount = extra.Count;
+                sideCount = side.Count;
+            }
+
+            DeckSaveResult result = FlowService.SaveDeck(new DeckSaveRequest
+            {
+                DeckName = deckInUse,
+                MainCount = mainCount,
+                ExtraCount = extraCount,
+                SideCount = sideCount,
+                SerializedDeck = YGOSharp.YdkDeckSerializer.Serialize(main, extra, side)
+            });
+
+            if (result.ExceededLimit)
             {
                 RMSshow_none(InterString.Get("卡组内卡片张数超过限制。"));
                 return false;
             }
+
+            if (!result.Succeeded)
+            {
+                RMSshow_none(InterString.Get("保存失败！"));
+                return false;
+            }
+
+            deckDirty = false;
+            RMSshow_none(InterString.Get("卡组[?]已经被保存。", deckInUse));
+            return true;
         }
         catch (Exception)
         {
@@ -1145,7 +1148,8 @@ public class DeckManager : ServantWithCardDescription
         gameObjectDesk.transform.position = new Vector3(0, 0, 0);
         gameObjectDesk.transform.eulerAngles = new Vector3(90, 0, 0);
         gameObjectDesk.transform.localScale = new Vector3(30, 30, 1);
-        gameObjectDesk.GetComponent<Renderer>().material.mainTexture = Program.GetTextureViaPath("texture/duel/deckTable.png");
+        gameObjectDesk.GetComponent<Renderer>().material.mainTexture =
+            RuntimeTextureLoader.Load(RuntimeDirectory.Texture, "duel", "deckTable.png");
         //UIHelper.SetMaterialRenderingMode(gameObjectDesk.GetComponent<Renderer>().material, UIHelper.RenderingMode.Transparent);
         Rigidbody rigidbody = gameObjectDesk.AddComponent<Rigidbody>();
         rigidbody.useGravity = false;
@@ -1459,6 +1463,11 @@ public class DeckManager : ServantWithCardDescription
     public YGOSharp.Deck deck = new YGOSharp.Deck();
     public bool deckDirty = false;
 
+    public void loadDeck(string deckName)
+    {
+        loadDeckFromYDK(FlowService.GetDeckPath(deckName));
+    }
+
     public void loadDeckFromYDK(string path)
     {
         FromYDKtoCodedDeck(path, out deck);
@@ -1471,78 +1480,7 @@ public class DeckManager : ServantWithCardDescription
         deck = new YGOSharp.Deck();
         try
         {
-            string text = System.IO.File.ReadAllText(path);
-            string st = text.Replace("\r", "");
-            string[] lines = st.Split(new string[] { "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            int flag = -1;
-            foreach (string line in lines)
-            {
-                if (line == "#main")
-                {
-                    flag = 1;
-                }
-                else if (line == "#extra")
-                {
-                    flag = 2;
-                }
-                else if (line == "!side")
-                {
-                    flag = 3;
-                }
-                else
-                {
-                    int code = 0;
-                    try
-                    {
-                        code = Int32.Parse(line);
-                    }
-                    catch (Exception)
-                    {
-
-                    }
-                    if (code > 100)
-                    {
-                        YGOSharp.Card card = YGOSharp.CardsManager.Get(code);
-                        if (card.Id > 0 && flag != 3)
-                        {
-                            if (card.IsExtraCard())
-                            {
-                                deck.Extra.Add(code);
-                                deck.Deck_O.Extra.Add(code);
-                            }
-                            else
-                            {
-                                deck.Main.Add(code);
-                                deck.Deck_O.Main.Add(code);
-                            }
-                        }
-                        else
-                        switch (flag)
-                        {
-                            case 1:
-                                {
-                                    deck.Main.Add(code);
-                                    deck.Deck_O.Main.Add(code);
-                                }
-                                break;
-                            case 2:
-                                {
-                                    deck.Extra.Add(code);
-                                    deck.Deck_O.Extra.Add(code);
-                                }
-                                break;
-                            case 3:
-                                {
-                                    deck.Side.Add(code);
-                                    deck.Deck_O.Side.Add(code);
-                                }
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                }
-            }
+            deck = YGOSharp.YdkDeckImporter.LoadDeck(path, true);
         }
         catch (Exception e)
         {

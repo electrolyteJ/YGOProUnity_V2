@@ -10,6 +10,9 @@ using YGOSharp.OCGWrapper.Enums;
 
 public static class TcpHelper
 {
+    public delegate bool StocMessageDispatch(StocMessage message, BinaryReader reader);
+    public delegate bool DisconnectHandler();
+
     public static TcpClient tcpClient = null;
 
     static  NetworkStream networkStream = null;
@@ -85,6 +88,23 @@ public static class TcpHelper
 
     static List<byte[]> datas = new List<byte[]>();
 
+    private static StocMessageDispatch stocMessageDispatcher;
+    private static DisconnectHandler disconnectHandler;
+
+    public static StocMessageDispatch SetStocMessageDispatcher(StocMessageDispatch dispatcher)
+    {
+        StocMessageDispatch previousDispatcher = stocMessageDispatcher;
+        stocMessageDispatcher = dispatcher;
+        return previousDispatcher;
+    }
+
+    public static DisconnectHandler SetDisconnectHandler(DisconnectHandler handler)
+    {
+        DisconnectHandler previousHandler = disconnectHandler;
+        disconnectHandler = handler;
+        return previousHandler;
+    }
+
     public static void preFrameFunction()
     {
         if (datas.Count>0)
@@ -98,85 +118,15 @@ public static class TcpHelper
                         MemoryStream memoryStream = new MemoryStream(datas[i]);
                         BinaryReader r = new BinaryReader(memoryStream);
                         var ms = (StocMessage)(r.ReadByte());
-                        switch (ms)
+                        StocMessageDispatch dispatcher = stocMessageDispatcher ?? LegacyTcpDispatchBridge.Dispatch;
+                        if (dispatcher != null && dispatcher(ms, r) && ShouldSaveRecord(ms))
                         {
-                            case StocMessage.GameMsg:
-                                Program.I().room.StocMessage_GameMsg(r);
-                                break;
-                            case StocMessage.ErrorMsg:
-                                Program.I().room.StocMessage_ErrorMsg(r);
-                                break;
-                            case StocMessage.SelectHand:
-                                Program.I().room.StocMessage_SelectHand(r);
-                                break;
-                            case StocMessage.SelectTp:
-                                Program.I().room.StocMessage_SelectTp(r);
-                                break;
-                            case StocMessage.HandResult:
-                                Program.I().room.StocMessage_HandResult(r);
-                                break;
-                            case StocMessage.TpResult:
-                                Program.I().room.StocMessage_TpResult(r);
-                                break;
-                            case StocMessage.ChangeSide:
-                                Program.I().room.StocMessage_ChangeSide(r);
-                                TcpHelper.SaveRecord();
-                                break;
-                            case StocMessage.WaitingSide:
-                                Program.I().room.StocMessage_WaitingSide(r);
-                                TcpHelper.SaveRecord();
-                                break;
-                            case StocMessage.DeckCount:
-                                Program.I().room.StocMessage_DeckCount(r);
-                                break;
-                            case StocMessage.CreateGame:
-                                Program.I().room.StocMessage_CreateGame(r);
-                                break;
-                            case StocMessage.JoinGame:
-                                Program.I().room.StocMessage_JoinGame(r);
-                                break;
-                            case StocMessage.TypeChange:
-                                Program.I().room.StocMessage_TypeChange(r);
-                                break;
-                            case StocMessage.LeaveGame:
-                                Program.I().room.StocMessage_LeaveGame(r);
-                                break;
-                            case StocMessage.DuelStart:
-                                Program.I().room.StocMessage_DuelStart(r);
-                                break;
-                            case StocMessage.DuelEnd:
-                                Program.I().room.StocMessage_DuelEnd(r);
-                                TcpHelper.SaveRecord();
-                                break;
-                            case StocMessage.Replay:
-                                Program.I().room.StocMessage_Replay(r);
-                                TcpHelper.SaveRecord();
-                                break;
-                            case StocMessage.TimeLimit:
-                                Program.I().ocgcore.StocMessage_TimeLimit(r);
-                                break;
-                            case StocMessage.Chat:
-                                Program.I().room.StocMessage_Chat(r);
-                                break;
-                            case StocMessage.HsPlayerEnter:
-                                Program.I().room.StocMessage_HsPlayerEnter(r);
-                                break;
-                            case StocMessage.HsPlayerChange:
-                                Program.I().room.StocMessage_HsPlayerChange(r);
-                                break;
-                            case StocMessage.HsWatchChange:
-                                Program.I().room.StocMessage_HsWatchChange(r);
-                                break;
-                            case StocMessage.TeammateSurrender:
-                                Program.I().room.StocMessage_TeammateSurrender(r);
-                                break;
-                            default:
-                                break;
+                            TcpHelper.SaveRecord();
                         }
                     }
                     catch (System.Exception e)
                     {
-                       // Program.DEBUGLOG(e);
+                        Program.DEBUGLOG(e);
                     }
                 }
                 datas.Clear();
@@ -196,6 +146,12 @@ public static class TcpHelper
             }
 
             tcpClient = null;
+            DisconnectHandler registeredDisconnectHandler = disconnectHandler;
+            if (registeredDisconnectHandler != null && registeredDisconnectHandler())
+            {
+                return;
+            }
+
             if (Program.I().ocgcore.isShowed == false)
             {
                 if (Program.I().menu.isShowed == false) 
@@ -215,6 +171,20 @@ public static class TcpHelper
                 Program.I().ocgcore.forceMSquit();
             }
 
+        }
+    }
+
+    private static bool ShouldSaveRecord(StocMessage message)
+    {
+        switch (message)
+        {
+            case StocMessage.ChangeSide:
+            case StocMessage.WaitingSide:
+            case StocMessage.DuelEnd:
+            case StocMessage.Replay:
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -425,44 +395,38 @@ public static class TcpHelper
 
     public static List<Package> readPackagesInRecord(string path)
     {
-        List<Package> re = null;
         try
         {
-            re = getPackages(File.ReadAllBytes(path));
+            return ReplayPackageCodec.Decode(RuntimeReplayFile.ReadBytes(path));
         }
         catch (System.Exception e)
         {
-            re = new List<Package>();
             UnityEngine.Debug.Log(e);
+            return new List<Package>();
         }
-        return re;
     }
 
     public static List<Package> getPackages(byte[] buffer)
     {
-        List<Package> re = new List<Package>();
-        try
-        {
-            BinaryReader reader;
-            using (reader = new BinaryReader(new MemoryStream(buffer)))
-            {
-                while (reader.BaseStream.Position < reader.BaseStream.Length)
-                {
-                    Package p = new Package();
-                    p.Fuction = reader.ReadByte();
-                    p.Data = new BinaryMaster(reader.ReadBytes((int)(reader.ReadUInt32())));
-                    re.Add(p);
-                }
-            }
-        }
-        catch (System.Exception e)
-        {
-            UnityEngine.Debug.Log(e);
-        }
-        return re;
+        return ReplayPackageCodec.Decode(buffer);
     }
 
     public static string lastRecordName = "";   
+
+    public static string GetReplayPath(string replayName)
+    {
+        return RuntimeReplayFile.GetReplayRecordPath(replayName);
+    }
+
+    public static void DeleteReplayFileIfExists(string replayName)
+    {
+        RuntimeReplayFile.DeleteReplayRecordIfExists(replayName);
+    }
+
+    public static void MoveReplayFileIfExists(string sourceReplayName, string targetReplayName, bool deleteTargetFirst)
+    {
+        RuntimeReplayFile.MoveReplayRecord(sourceReplayName, targetReplayName, deleteTargetFirst);
+    }
 
     public static void SaveRecord()
     {
@@ -501,22 +465,9 @@ public static class TcpHelper
                         startI = packagesInRecord.Count;
                     }
                     packagesInRecord.Insert(startI, Program.I().ocgcore.getNamePacket());
-                    if (File.Exists("replay/" + lastRecordName + ".yrp3d"))
-                    {
-                        File.Delete("replay/" + lastRecordName + ".yrp3d");
-                    }
+                    DeleteReplayFileIfExists(lastRecordName);
                     lastRecordName = UIHelper.getTimeString();
-                    FileStream stream = File.Create("replay/" + lastRecordName + ".yrp3d");
-                    BinaryWriter writer = new BinaryWriter(stream);
-                    foreach (var item in packagesInRecord)
-                    {
-                        writer.Write((byte)item.Fuction);
-                        writer.Write((UInt32)item.Data.getLength());
-                        writer.Write(item.Data.get());
-                    }
-                    stream.Flush();
-                    writer.Close();
-                    stream.Close();
+                    RuntimeReplayFile.WriteReplayRecord(lastRecordName, ReplayPackageCodec.Encode(packagesInRecord));
                 }
             }
             //packagesInRecord.Clear();

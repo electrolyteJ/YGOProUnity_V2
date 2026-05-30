@@ -133,39 +133,72 @@ public class PrecyOcg
 
     Percy.ScriptData scriptHandler(string filename)
     {
-        //string filename = GetScriptFilename(scriptName);
-        byte[] content;
         Percy.ScriptData ret;
         ret.buffer = IntPtr.Zero;
         ret.len = 0;
-        bool found = false;
-        string filename2 = filename.TrimStart('.', '/');
-        foreach (ZipFile zip in GameZipManager.Zips)
+        if (TryLoadScriptBytes(filename, out byte[] content))
         {
-            if (zip.ContainsEntry(filename2))
-            {
-                MemoryStream ms = new MemoryStream();
-                ZipEntry e = zip[filename2];
-                e.Extract(ms);
-                content = ms.ToArray();
-                Marshal.Copy(content, 0, _buffer, content.Length);
-                ret.buffer = _buffer;
-                ret.len = content.Length;
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-        {
-            if (File.Exists(filename))
-            {
-                content = File.ReadAllBytes(filename);
-                Marshal.Copy(content, 0, _buffer, content.Length);
-                ret.buffer = _buffer;
-                ret.len = content.Length;
-            }
+            CopyToScriptBuffer(content, ref ret);
         }
         return ret;
+    }
+
+    bool TryLoadScriptBytes(string filename, out byte[] content)
+    {
+        if (TryLoadScriptBytesFromZips(filename, out content))
+        {
+            return true;
+        }
+
+        return TryReadFileBytes(filename, out content);
+    }
+
+    bool TryLoadScriptBytesFromZips(string filename, out byte[] content)
+    {
+        content = null;
+        string filenameInZip = filename.TrimStart('.', '/');
+        foreach (ZipFile zip in GameZipManager.Zips)
+        {
+            if (!zip.ContainsEntry(filenameInZip))
+            {
+                continue;
+            }
+
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ZipEntry entry = zip[filenameInZip];
+                entry.Extract(ms);
+                content = ms.ToArray();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool TryReadFileBytes(string filename, out byte[] content)
+    {
+        content = null;
+        FileInfo fileInfo = new FileInfo(filename);
+        if (!fileInfo.Exists)
+        {
+            return false;
+        }
+
+        using (FileStream stream = fileInfo.OpenRead())
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            stream.CopyTo(memoryStream);
+            content = memoryStream.ToArray();
+            return true;
+        }
+    }
+
+    static void CopyToScriptBuffer(byte[] content, ref Percy.ScriptData ret)
+    {
+        Marshal.Copy(content, 0, _buffer, content.Length);
+        ret.buffer = _buffer;
+        ret.len = content.Length;
     }
 
     void chatHandler(string result) 

@@ -1,37 +1,53 @@
-﻿using UnityEngine;
+﻿using App.Features.Menu.Services;
+using AppSettingsScreenController = App.UI.Screens.Menu.SettingsScreenController;
+using UnityEngine;
 using System;
 public class Setting : WindowServant2D
 {
+    private SettingsFlowService flowService;
+    private AppSettingsScreenController screenController;
+
     private EventDelegate onChange;
 
     public LAZYsetting setting;
+
+    private SettingsFlowService FlowService
+    {
+        get
+        {
+            if (flowService == null)
+            {
+                flowService = new SettingsFlowService();
+            }
+
+            return flowService;
+        }
+    }
+
+    private AppSettingsScreenController ScreenController
+    {
+        get
+        {
+            if (screenController == null)
+            {
+                screenController = new AppSettingsScreenController(FlowService);
+            }
+
+            return screenController;
+        }
+    }
 
     public override void initialize()
     {
         gameObject = createWindow(this, Program.I().new_ui_setting);
         setting = gameObject.GetComponentInChildren<LAZYsetting>();
+        ScreenController.Bind(gameObject, FlowService, ApplyLegacyShow, ApplyLegacyHide);
         UIHelper.registEvent(gameObject, "exit_", onClickExit);
         UIHelper.registEvent(gameObject, "screen_", resizeScreen);
         UIHelper.registEvent(gameObject, "full_", resizeScreen);
         UIHelper.registEvent(gameObject, "resize_", resizeScreen);
-        UIHelper.getByName<UIToggle>(gameObject, "full_").value = Screen.fullScreen;
-        UIHelper.getByName<UIToggle>(gameObject, "ignoreWatcher_").value = UIHelper.fromStringToBool(Config.Get("ignoreWatcher_", "0"));
-        UIHelper.getByName<UIToggle>(gameObject, "ignoreOP_").value = UIHelper.fromStringToBool(Config.Get("ignoreOP_", "0"));
-        UIHelper.getByName<UIToggle>(gameObject, "smartSelect_").value = UIHelper.fromStringToBool(Config.Get("smartSelect_", "1"));
-        UIHelper.getByName<UIToggle>(gameObject, "autoChain_").value = UIHelper.fromStringToBool(Config.Get("autoChain_", "1"));
-        UIHelper.getByName<UIToggle>(gameObject, "handPosition_").value = UIHelper.fromStringToBool(Config.Get("handPosition_", "1"));
-        UIHelper.getByName<UIToggle>(gameObject, "handmPosition_").value = UIHelper.fromStringToBool(Config.Get("handmPosition_", "1"));
-        UIHelper.getByName<UIToggle>(gameObject, "spyer_").value = UIHelper.fromStringToBool(Config.Get("spyer_", "1"));
-        UIHelper.getByName<UIToggle>(gameObject, "resize_").value = UIHelper.fromStringToBool(Config.Get("resize_", "0"));
-        UIHelper.getByName<UIToggle>(gameObject, "longField_").value = UIHelper.fromStringToBool(Config.Get("longField_", "0"));
-        if (QualitySettings.GetQualityLevel()<3)
-        {
-            UIHelper.getByName<UIToggle>(gameObject, "high_").value = false;
-        }
-        else
-        {
-            UIHelper.getByName<UIToggle>(gameObject, "high_").value = true;
-        }
+        SettingsViewState loadedState = LoadCurrentState();
+        ApplyLoadedState(loadedState);
         UIHelper.registEvent(gameObject, "ignoreWatcher_", save);
         UIHelper.registEvent(gameObject, "ignoreOP_", save);
         UIHelper.registEvent(gameObject, "smartSelect_", save);
@@ -48,23 +64,6 @@ public class Setting : WindowServant2D
         //sliderAlpha = UIHelper.getByName<UISlider>(gameObject, "alpha_");
         sliderVsize = UIHelper.getByName<UISlider>(gameObject, "vSize_");
         Program.go(2000,readVales);
-        var collection = gameObject.GetComponentsInChildren<UIToggle>();
-        for (int i = 0; i < collection.Length; i++)
-        {
-            if (collection[i].name.Length > 0 && collection[i].name[0] == '*')
-            {
-                if (collection[i].name== "*mouseParticle" || collection[i].name == "*showOff" || collection[i].name == "*Efield" || collection[i].name == "*Ewin") 
-                {
-                    collection[i].value = UIHelper.fromStringToBool(Config.Get(collection[i].name, "1"));
-                }
-                else
-                {
-                    collection[i].value = UIHelper.fromStringToBool(Config.Get(collection[i].name, "0"));
-                }
-            }
-        }
-        setting.showoffATK.value = Config.Get("showoffATK","1800");
-        setting.showoffStar.value = Config.Get("showoffStar", "5");
         UIHelper.registEvent(setting.showoffATK.gameObject, onchangeClose);
         UIHelper.registEvent(setting.showoffStar.gameObject, onchangeClose);
         UIHelper.registEvent(setting.mouseEffect.gameObject, onchangeMouse);
@@ -73,21 +72,56 @@ public class Setting : WindowServant2D
         UIHelper.registEvent(setting.Vpedium.gameObject, onCP);
         UIHelper.registEvent(setting.Vfield.gameObject, onCP);
         UIHelper.registEvent(setting.Vlink.gameObject, onCP);
+        ApplyInitialRuntimeState(loadedState);
         onchangeMouse();
         onchangeCloud();
         setScreenSizeValue();
+    }
+
+    public override void show()
+    {
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
+    }
+
+    public override void hide()
+    {
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
+    }
+
+    private void ApplyLegacyShow()
+    {
+        base.show();
+    }
+
+    private void ApplyLegacyHide()
+    {
+        base.hide();
+    }
+
+    private void ApplyInitialRuntimeState(SettingsViewState state)
+    {
+        if (state == null)
+        {
+            return;
+        }
+
+        SettingsLegacyBindings.ApplyInitialRuntimeState(ScreenController, state, CreateRuntimeActions());
     }
 
     private void readVales()
     {
         try
         {
-            setting.sliderVolum.forceValue(((float)(int.Parse(Config.Get("vol_", "750")))) / 1000f);
-            setting.sliderSize.forceValue(((float)(int.Parse(Config.Get("size_", "500")))) / 1000f);
-            setting.sliderSizeDrawing.forceValue(((float)(int.Parse(Config.Get("vSize_", "500")))) / 1000f);
+            SettingsViewState state = LoadCurrentState();
+            setting.sliderVolum.forceValue(state.Volume);
+            setting.sliderSize.forceValue(state.Size);
+            setting.sliderSizeDrawing.forceValue(state.VerticalSize);
             //setting.sliderAlpha.forceValue(((float)(int.Parse(Config.Get("alpha_", "666")))) / 1000f);
             onChangeAlpha();
             onChangeSize();
+            onChangeVsize();
         }
         catch (Exception e)
         {
@@ -97,12 +131,12 @@ public class Setting : WindowServant2D
 
     public void onchangeCloud()
     {
-        Program.MonsterCloud = setting.cloud.value;
+        ScreenController.ApplyCloudToggle(setting.cloud.value, CreateRuntimeActions());
     }
 
     public void onchangeMouse()
     {
-        Program.I().mouseParticle.SetActive(setting.mouseEffect.value);
+        ScreenController.ApplyMouseToggle(setting.mouseEffect.value, CreateRuntimeActions());
     }
 
     //private int dontResizeTwice = 2;
@@ -127,16 +161,10 @@ public class Setting : WindowServant2D
 
     public void onchangeCloseUp()   
     {
-        if (setting.closeUp.value == false)
-        {
-            setting.sliderAlpha.forceValue(0);
-            setting.sliderSize.forceValue(0);
-        }
-        else
-        {
-            setting.sliderAlpha.forceValue(0.6666f);
-            setting.sliderSize.forceValue(1f);
-        }
+        ScreenController.ApplyCloseUpPreset(
+            setting.closeUp.value,
+            delegate(float value) { setting.sliderAlpha.forceValue(value); },
+            delegate(float value) { setting.sliderSize.forceValue(value); });
         onChangeSize();
         onChangeAlpha();
     }
@@ -179,8 +207,7 @@ public class Setting : WindowServant2D
 
     void onChangeLongField()
     {
-        Program.longField = UIHelper.getByName<UIToggle>(gameObject, "longField_").value;
-        onCP();
+        ScreenController.ApplyLongFieldToggle(UIHelper.getByName<UIToggle>(gameObject, "longField_").value, CreateRuntimeActions());
     }
 
     UISlider sliderVsize;
@@ -188,7 +215,7 @@ public class Setting : WindowServant2D
     {
         if (sliderVsize != null)
         {
-            Program.verticleScale = 4f + 2f * sliderVsize.value;
+            ScreenController.ApplyVerticalSize(sliderVsize.value, CreateRuntimeActions());
         }
     }
 
@@ -197,7 +224,7 @@ public class Setting : WindowServant2D
     {
         if (sliderSize != null)
         {
-            Program.fieldSize = 1f + sliderSize.value * 0.21f;
+            ScreenController.ApplyFieldSize(sliderSize.value, CreateRuntimeActions());
         }
     }
 
@@ -213,7 +240,7 @@ public class Setting : WindowServant2D
 
     void onClickExit()
     {
-        hide();
+        ScreenController.Close(hide);
     }
 
     void resizeScreen()
@@ -226,56 +253,75 @@ public class Setting : WindowServant2D
         //dontResizeTwice = 2;
         if (UIHelper.isMaximized())
             UIHelper.RestoreWindow();
-        string[] mats = UIHelper.getByName<UIPopupList>(gameObject, "screen_").value.Split(new string[] { "*" }, StringSplitOptions.RemoveEmptyEntries);
-        if (mats.Length == 2)
+        SettingsResizeRequest resizeRequest;
+        if (ScreenController.TryBuildResizeRequest(
+            UIHelper.getByName<UIPopupList>(gameObject, "screen_").value,
+            UIHelper.getByName<UIToggle>(gameObject, "full_").value,
+            out resizeRequest))
         {
-            Screen.SetResolution(int.Parse(mats[0]), int.Parse(mats[1]), UIHelper.getByName<UIToggle>(gameObject, "full_").value);
+            Screen.SetResolution(resizeRequest.Width, resizeRequest.Height, resizeRequest.FullScreen);
         }
         Program.go(100, () => { Program.I().fixScreenProblems(); });
     }
 
     public void saveWhenQuit()
     {
-        Config.Set("vol_", ((int)(UIHelper.getByName<UISlider>(gameObject, "vol_").value * 1000)).ToString());
-        Config.Set("size_", ((int)(UIHelper.getByName<UISlider>(gameObject, "size_").value * 1000)).ToString());
-        Config.Set("vSize_", ((int)(UIHelper.getByName<UISlider>(gameObject, "vSize_").value * 1000)).ToString());
-        //Config.Set("alpha_", ((int)(UIHelper.getByName<UISlider>(gameObject, "alpha_").value * 1000)).ToString());
-        Config.Set("longField_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "longField_").value));
-        var collection = gameObject.GetComponentsInChildren<UIToggle>();
-        for (int i = 0; i < collection.Length; i++) 
-        {
-            if (collection[i].name.Length > 0 && collection[i].name[0] == '*')
-            {
-                Config.Set(collection[i].name, UIHelper.fromBoolToString(collection[i].value));
-            }
-        }
-        Config.Set("showoffATK", setting.showoffATK.value.ToString());
-        Config.Set("showoffStar", setting.showoffStar.value.ToString());
-        Config.Set("resize_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "resize_").value));
-        Config.Set("maximize_", UIHelper.fromBoolToString(UIHelper.isMaximized()));
+        ScreenController.SaveQuitState(
+            CaptureCurrentState(),
+            delegate(string key, string value) { Config.Set(key, value); },
+            delegate { return UIHelper.isMaximized(); });
     }
 
     public void save()
     {
-        Config.Set("ignoreWatcher_",UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "ignoreWatcher_").value));
-        Config.Set("ignoreOP_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "ignoreOP_").value));
-        Config.Set("smartSelect_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "smartSelect_").value));
-        Config.Set("autoChain_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "autoChain_").value));
-        Config.Set("handPosition_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "handPosition_").value));
-        Config.Set("handmPosition_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "handmPosition_").value));
-        Config.Set("spyer_", UIHelper.fromBoolToString(UIHelper.getByName<UIToggle>(gameObject, "spyer_").value));
-        if (UIHelper.getByName<UIToggle>(gameObject, "high_").value)
-        {
-            QualitySettings.SetQualityLevel(5);
-        }
-        else
-        {
-            QualitySettings.SetQualityLevel(0);
-        }
+        ScreenController.SaveLiveState(
+            CaptureCurrentState(),
+            delegate(string key, string value) { Config.Set(key, value); },
+            CreateRuntimeActions());
     }
 
     public float soundValue()
     {
         return UIHelper.getByName<UISlider>(gameObject, "vol_").value;
+    }
+
+    private SettingsViewState LoadCurrentState()
+    {
+        return ScreenController.LoadState(
+            SettingsLegacyBindings.GetAdditionalToggleNames(gameObject),
+            delegate(string key, string defaultValue) { return Config.Get(key, defaultValue); },
+            delegate { return Screen.fullScreen; },
+            delegate { return QualitySettings.GetQualityLevel(); });
+    }
+
+    private void ApplyLoadedState(SettingsViewState state)
+    {
+        SettingsLegacyBindings.ApplyLoadedState(gameObject, setting, state);
+    }
+
+    private SettingsViewState CaptureCurrentState()
+    {
+        return SettingsLegacyBindings.CaptureCurrentState(
+            gameObject,
+            setting,
+            delegate { return Screen.fullScreen; });
+    }
+
+    private SettingsRuntimeActions CreateRuntimeActions()
+    {
+        return SettingsLegacyBindings.CreateRuntimeActions(
+            delegate(bool value) { Program.MonsterCloud = value; },
+            delegate(bool value)
+            {
+                if (Program.I().mouseParticle != null)
+                {
+                    Program.I().mouseParticle.SetActive(value);
+                }
+            },
+            delegate(bool value) { Program.longField = value; },
+            delegate(float value) { Program.fieldSize = value; },
+            delegate(float value) { Program.verticleScale = value; },
+            onCP,
+            delegate(int value) { QualitySettings.SetQualityLevel(value); });
     }
 }

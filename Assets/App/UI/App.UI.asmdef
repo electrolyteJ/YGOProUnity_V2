@@ -1,0 +1,24 @@
+{
+  "name": "App.UI",
+  "rootNamespace": "",
+  "references": [
+    "App.Core",
+    "App.Features.Menu",
+    "App.Features.Online",
+    "App.Features.Deck",
+    "App.Features.Replay",
+    "App.Features.Room",
+    "App.Features.Duel",
+    "App.Features.Puzzle",
+    "App.Features.AI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

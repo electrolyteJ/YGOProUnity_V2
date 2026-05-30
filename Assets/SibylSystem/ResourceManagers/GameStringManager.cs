@@ -36,7 +36,7 @@ public static class GameStringManager
 
     public static void initialize(string path)
     {
-        string text = System.IO.File.ReadAllText(path);
+        string text = RuntimeTextFile.ReadAllText(path);
         initializeContent(text);
     }
 
@@ -59,7 +59,7 @@ public static class GameStringManager
                     }
                     catch (Exception e)
                     {
-                        Program.DEBUGLOG(e);
+                        RuntimeLog.Exception(e);
                     }
                     a.content = "";
                     for (int i = 2; i < mats.Length; i++)
@@ -125,7 +125,7 @@ public static class GameStringManager
             }
             catch (Exception e)
             {
-                Program.DEBUGLOG(e);
+                RuntimeLog.Exception(e);
             }
         }
         if (a == "")
@@ -158,4 +158,3 @@ public static class GameStringManager
         return formatLocation(gps.location, gps.sequence);
     }
 }
-

@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using App.Features.Menu.Services;
+using AppMenuScreenController = App.UI.Screens.Menu.MenuScreenController;
+using UnityEngine;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -11,10 +13,51 @@ using UnityEngine.Networking;
 
 public class Menu : WindowServantSP 
 {
+    private static readonly MenuFlowService FlowService = new MenuFlowService();
+    private static readonly AppMenuScreenController ScreenController = new AppMenuScreenController(FlowService);
+
+    private static string GetVersionConfigPath()
+    {
+        return RuntimePaths.GetFilePath(RuntimeDirectory.Config, "ver.txt");
+    }
+
+    private static bool TryReadUpdateServerConfig(out string version, out string url)
+    {
+        string verPath = GetVersionConfigPath();
+        RuntimeTextFile.EnsureFileExists(verPath);
+        string[] lines = ReadUtf8Lines(verPath);
+        if (lines.Length == 2 && Uri.IsWellFormedUriString(lines[1], UriKind.Absolute))
+        {
+            version = lines[0];
+            url = lines[1];
+            return true;
+        }
+
+        version = "";
+        url = "";
+        return false;
+    }
+
+    private static string[] ReadUtf8Lines(string path)
+    {
+        List<string> lines = new List<string>();
+        using (StreamReader reader = new StreamReader(path, Encoding.UTF8))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                lines.Add(line);
+            }
+        }
+
+        return lines.ToArray();
+    }
+
     //GameObject screen;
     public override void initialize()
     {
         createWindow(Program.I().new_ui_menu);
+        ScreenController.Bind(gameObject, FlowService, ApplyLegacyShow, ApplyLegacyHide);
         UIHelper.registEvent(gameObject, "setting_", onClickSetting);
         UIHelper.registEvent(gameObject, "deck_", onClickSelectDeck);
         UIHelper.registEvent(gameObject, "online_", onClickOnline);
@@ -27,13 +70,14 @@ public class Menu : WindowServantSP
 
     public override void show()
     {
-        base.show();
-        Program.charge();
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
     }
 
     public override void hide()
     {
-        base.hide();
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
     }
 
     string upurl = "";
@@ -41,14 +85,13 @@ public class Menu : WindowServantSP
     IEnumerator checkUpdate()
     {
         yield return new WaitForSeconds(1);
-        var verFile = File.ReadAllLines("config/ver.txt", Encoding.UTF8);
-        if (verFile.Length != 2 || !Uri.IsWellFormedUriString(verFile[1], UriKind.Absolute))
+        string ver;
+        string url;
+        if (!TryReadUpdateServerConfig(out ver, out url))
         {
             Program.PrintToChat(InterString.Get("YGOPro2 自动更新：[ff5555]未设置更新服务器，无法检查更新。[-]@n请从官网重新下载安装完整版以获得更新。"));
             yield break;
         }
-        string ver = verFile[0];
-        string url = verFile[1];
         UnityWebRequest www = UnityWebRequest.Get(url);
         www.SetRequestHeader("Cache-Control", "max-age=0, no-cache, no-store");
         www.SetRequestHeader("Pragma", "no-cache");
@@ -56,7 +99,7 @@ public class Menu : WindowServantSP
         try
         {
             string result = www.downloadHandler.text;
-            string[] lines = result.Replace("\r", "").Split("\n");
+            string[] lines = RuntimeTextFile.SplitNormalizedLines(result);
             string[] mats = lines[0].Split(":.:");
             if (ver != mats[0])
             {
@@ -107,50 +150,63 @@ public class Menu : WindowServantSP
 
     public void onClickExit()
     {
-        Program.I().quit();
-        Program.Running = false;
-        TcpHelper.SaveRecord();
-        Process.GetCurrentProcess().Kill();
+        ScreenController.Navigate(MenuDestination.Exit, CreateNavigationActions());
     }
 
     void onClickOnline()
     {
-        Program.I().shiftToServant(Program.I().selectServer);
+        ScreenController.Navigate(MenuDestination.Online, CreateNavigationActions());
     }
 
     void onClickAI()
     {
-        Program.I().shiftToServant(Program.I().aiRoom);
+        ScreenController.Navigate(MenuDestination.AI, CreateNavigationActions());
     }
 
     void onClickPizzle()
     {
-        Program.I().shiftToServant(Program.I().puzzleMode);
+        ScreenController.Navigate(MenuDestination.Puzzle, CreateNavigationActions());
     }
 
     void onClickReplay()
     {
-        Program.I().shiftToServant(Program.I().selectReplay);
+        ScreenController.Navigate(MenuDestination.Replay, CreateNavigationActions());
     }
 
     void onClickSetting()
     {
-        Program.I().setting.show();
+        ScreenController.Navigate(MenuDestination.Settings, CreateNavigationActions());
     }
 
     void onClickSelectDeck()
     {
-        Program.I().shiftToServant(Program.I().selectDeck);
+        ScreenController.Navigate(MenuDestination.Deck, CreateNavigationActions());
+    }
+
+    public void RestoreAsActiveRoute()
+    {
+        if (isShowed)
+        {
+            ScreenController.RestoreAsCurrentRoute();
+        }
+    }
+
+    private void ApplyLegacyShow()
+    {
+        base.show();
+        Program.charge();
+    }
+
+    private void ApplyLegacyHide()
+    {
+        base.hide();
     }
 
     public static void deleteShell()
     {
         try
         {
-            if (File.Exists("commamd.shell") == true)
-            {
-                File.Delete("commamd.shell");
-            }
+            Program.DeleteCommandShell();
         }
         catch (Exception)
         {
@@ -181,10 +237,7 @@ public class Menu : WindowServantSP
             }
             try
             {
-                if (File.Exists("commamd.shell") == false)
-                {
-                    File.Create("commamd.shell").Close();
-                }
+                Program.EnsureCommandShellExists();
             }
             catch (System.Exception e)
             {
@@ -194,60 +247,8 @@ public class Menu : WindowServantSP
             string all = "";
             try
             {
-                all = File.ReadAllText("commamd.shell", Encoding.UTF8);
-                char[] parmChars = all.ToCharArray();
-                bool inQuote = false;
-                for (int index = 0; index < parmChars.Length; index++)
-                {
-                    if (parmChars[index] == '"')
-                    {
-                        inQuote = !inQuote;
-                        parmChars[index] = '\n';
-                    }
-                    if (!inQuote && parmChars[index] == ' ')
-                        parmChars[index] = '\n';
-                }
-                string[] mats = (new string(parmChars)).Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                if (mats.Length > 0)
-                {
-                    switch (mats[0])
-                    {
-                        case "online":
-                            if (mats.Length == 5)
-                            {
-                                UIHelper.iniFaces();//加载用户头像
-                                Program.I().selectServer.KF_onlineGame(mats[1], mats[2], mats[3], mats[4]);
-                            }
-                            if (mats.Length == 6)
-                            {
-                                UIHelper.iniFaces();
-                                Program.I().selectServer.KF_onlineGame(mats[1], mats[2], mats[3], mats[4], mats[5]);
-                            }
-                            break;
-                        case "edit":
-                            if (mats.Length == 2)
-                            {
-                                Program.I().selectDeck.KF_editDeck(mats[1]);//编辑卡组
-                            }
-                            break;
-                        case "replay":
-                            if (mats.Length == 2)
-                            {
-                                UIHelper.iniFaces();
-                                Program.I().selectReplay.KF_replay(mats[1]);//编辑录像
-                            }
-                            break;
-                        case "puzzle":
-                            if (mats.Length == 2)
-                            {
-                                UIHelper.iniFaces();
-                                Program.I().puzzleMode.KF_puzzle(mats[1]);//运行残局
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                }
+                all = Program.ReadCommandShell();
+                ScreenController.TryHandleShellCommand(all, CreateShellExecutionActions());
             }
             catch (System.Exception e)
             {
@@ -258,10 +259,7 @@ public class Menu : WindowServantSP
             {
                 if (all != "")
                 {
-                    if (File.Exists("commamd.shell") == true)
-                    {
-                        File.WriteAllText("commamd.shell", "");
-                    }
+                    Program.ClearCommandShell();
                 }
             }
             catch (System.Exception e)
@@ -270,5 +268,53 @@ public class Menu : WindowServantSP
                 UnityEngine.Debug.Log(e);
             }
         }
+    }
+
+    private static MenuNavigationActions CreateNavigationActions()
+    {
+        return MenuLegacyBindings.CreateNavigationActions(new MenuLegacyBindings.NavigationTargets
+        {
+            ShowSettings = delegate { Program.I().setting.show(); },
+            ShowDeck = delegate { Program.I().shiftToServant(Program.I().selectDeck); },
+            ShowOnline = delegate { Program.I().shiftToServant(Program.I().selectServer); },
+            ShowReplay = delegate { Program.I().shiftToServant(Program.I().selectReplay); },
+            ShowPuzzle = delegate { Program.I().shiftToServant(Program.I().puzzleMode); },
+            ShowAI = delegate { Program.I().shiftToServant(Program.I().aiRoom); },
+            ExitApplication = delegate
+            {
+                Program.I().quit();
+                Program.Running = false;
+                TcpHelper.SaveRecord();
+                Process.GetCurrentProcess().Kill();
+            },
+        });
+    }
+
+    private static MenuShellExecutionActions CreateShellExecutionActions()
+    {
+        return MenuLegacyBindings.CreateShellExecutionActions(new MenuLegacyBindings.ShellTargets
+        {
+            InitializeFaces = delegate { UIHelper.iniFaces(); },
+            OpenOnline = delegate(string host, string roomId, string userName, string password)
+            {
+                Program.I().selectServer.KF_onlineGame(host, roomId, userName, password);
+            },
+            OpenOnlineWithVersion = delegate(string host, string roomId, string userName, string password, string version)
+            {
+                Program.I().selectServer.KF_onlineGame(host, roomId, userName, password, version);
+            },
+            EditDeck = delegate(string deckName)
+            {
+                Program.I().selectDeck.KF_editDeck(deckName);
+            },
+            Replay = delegate(string replayName)
+            {
+                Program.I().selectReplay.KF_replay(replayName);
+            },
+            Puzzle = delegate(string puzzleName)
+            {
+                Program.I().puzzleMode.KF_puzzle(puzzleName);
+            },
+        });
     }
 }

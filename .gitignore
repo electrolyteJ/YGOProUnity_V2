@@ -42,5 +42,9 @@ UserSettings/
 .DS_Store
 .archive-stamp
 .idea/
-replay/
+picture/
+script/
 # ygopro
+ygopro-macos.app/
+runtime-zips/
+

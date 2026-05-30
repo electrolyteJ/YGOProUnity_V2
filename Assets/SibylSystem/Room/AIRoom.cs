@@ -1,7 +1,8 @@
-﻿using System;
+﻿using App.Features.AI.Services;
+using AppAiScreenController = App.UI.Screens.AI.AiScreenController;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
 
@@ -12,54 +13,80 @@ public class AIRoom : WindowServantSP
     string sort = "sortByTimeDeck";
     System.Diagnostics.Process serverProcess;
     System.Diagnostics.Process botProcess;
+    private AiLocalServer _localServer;
+    private WindBotRunner _botRunner;
+    private AiFlowService aiFlowService;
+    private AiRoomLaunchService aiRoomLaunchService;
+    private AppAiScreenController screenController;
+    private IList<AiRoomBotDefinition> Bots = new List<AiRoomBotDefinition>();
 
-    public class BotInfo
+    private AiFlowService FlowService
     {
-        public string name;
-        public string command;
-        public string desc;
-        public string[] flags;
-    }
-    private IList<BotInfo> Bots = new List<BotInfo>();
-    private void ReadBots(string confPath)
-    {
-        StreamReader reader = new StreamReader(new FileStream(confPath, FileMode.Open, FileAccess.Read));
-        while (!reader.EndOfStream)
+        get
         {
-            string line = reader.ReadLine().Trim();
-            if (line.Length > 0 && line[0] == '!')
+            if (aiFlowService == null)
             {
-                BotInfo newBot = new BotInfo();
-                newBot.name = line.TrimStart('!');
-                newBot.command = reader.ReadLine().Trim();
-                newBot.desc = reader.ReadLine().Trim();
-                line = reader.ReadLine().Trim();
-                newBot.flags = line.Split(' ');
-                if (Array.IndexOf(newBot.flags, "SELECT_DECKFILE") < 0)
-                    Bots.Add(newBot);
+                aiFlowService = new AiFlowService(LaunchService);
+            }
+
+            return aiFlowService;
+        }
+    }
+
+    private AiRoomLaunchService LaunchService
+    {
+        get
+        {
+            if (aiRoomLaunchService == null)
+            {
+                aiRoomLaunchService = new AiRoomLaunchService();
+            }
+
+            return aiRoomLaunchService;
+        }
+    }
+
+    private AppAiScreenController ScreenController
+    {
+        get
+        {
+            if (screenController == null)
+            {
+                screenController = new AppAiScreenController(FlowService);
+            }
+
+            return screenController;
+        }
+    }
+
+    private static string[] ReadConfigLines(string path)
+    {
+        List<string> lines = new List<string>();
+        using (StringReader reader = new StringReader(RuntimeTextFile.ReadAllText(path)))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                lines.Add(line);
             }
         }
+
+        return lines.ToArray();
     }
 
-    private string GetRandomBot(string flag)
+    private void ReadBots(string confPath)
     {
-        IList<BotInfo> foundBots = new List<BotInfo>();
-        foreach (var bot in Bots)
+        AiRoomBotDefinition[] parsedBots = LaunchService.ParseBots(ReadConfigLines(confPath));
+        for (int index = 0; index < parsedBots.Length; index++)
         {
-            if (Array.IndexOf(bot.flags, flag) >= 0) foundBots.Add(bot);
+            Bots.Add(parsedBots[index]);
         }
-        if (foundBots.Count > 0)
-        {
-            System.Random rand = new System.Random();
-            BotInfo bot = foundBots[rand.Next(foundBots.Count)];
-            return bot.command;
-        }
-        return "";
     }
 
     public override void initialize()
     {
         createWindow(Program.I().new_ui_aiRoom);
+        ScreenController.Bind(gameObject, FlowService, ApplyLegacyShow, ApplyLegacyHide);
         superScrollView = gameObject.GetComponentInChildren<UIselectableList>();
         superScrollView.selectedAction = onSelected;
         UIHelper.registEvent(gameObject, "start_", onStart);
@@ -67,7 +94,7 @@ public class AIRoom : WindowServantSP
         UIHelper.trySetLableText(gameObject, "percyHint", InterString.Get("人机模式"));
         UIHelper.trySetLableText(gameObject, "botdesc_", InterString.Get("请选择对手。"));
         superScrollView.install();
-        ReadBots("config/bot.conf");
+        ReadBots(RuntimePaths.GetFilePath(RuntimeDirectory.Config, "bot.conf"));
         SetActiveFalse();
     }
 
@@ -75,7 +102,7 @@ public class AIRoom : WindowServantSP
     {
         int sel = superScrollView.selectedIndex;
         if (sel >= 0 && sel < Bots.Count)
-            UIHelper.trySetLableText(gameObject, "botdesc_", Bots[sel].desc);
+            UIHelper.trySetLableText(gameObject, "botdesc_", Bots[sel].Description);
         else
             UIHelper.trySetLableText(gameObject, "botdesc_", InterString.Get("请选择对手。"));
     }
@@ -88,11 +115,21 @@ public class AIRoom : WindowServantSP
 
     void onClickExit()
     {
-        killServerProcess();
-        if (Program.exitOnReturn)
-            Program.I().menu.onClickExit();
-        else
-            Program.I().shiftToServant(Program.I().menu);
+        ScreenController.Close(new AiFlowCloseRequest
+        {
+            ExitOnReturn = Program.exitOnReturn
+        }, new AiFlowCloseActions
+        {
+            StopServer = killServerProcess,
+            ExitApplication = delegate
+            {
+                Program.I().menu.onClickExit();
+            },
+            ReturnToMenu = delegate
+            {
+                Program.I().shiftToServant(Program.I().menu);
+            }
+        });
     }
 
     public void killServerProcess()
@@ -102,33 +139,16 @@ public class AIRoom : WindowServantSP
             serverProcess.Kill();
         }
         serverProcess = null;
+
+        _botRunner?.Dispose();
+        _botRunner = null;
+        _localServer?.Stop();
+        _localServer = null;
     }
 
     void onStart()
     {
-        if (!isShowed)
-        {
-            return;
-        }
-        int sel = superScrollView.selectedIndex;
-        if (sel < 0 || sel >= Bots.Count)
-        {
-            return;
-        }
-
-        string aiCommand = Bots[sel].command;
-        Match match = Regex.Match(aiCommand, "Random=(\\w+)");
-        if (match.Success)
-        {
-            string randomFlag = match.Groups[1].Value;
-            string command = GetRandomBot(randomFlag);
-            if (command != "")
-            {
-                aiCommand = command;
-            }
-        }
-
-        launch(aiCommand, UIHelper.getByName<UIToggle>(gameObject, "lockhand_").value, UIHelper.getByName<UIToggle>(gameObject, "nocheck_").value, UIHelper.getByName<UIToggle>(gameObject, "noshuffle_").value);
+        launch(UIHelper.getByName<UIToggle>(gameObject, "lockhand_").value, UIHelper.getByName<UIToggle>(gameObject, "nocheck_").value, UIHelper.getByName<UIToggle>(gameObject, "noshuffle_").value);
     }
 
     void printFile()
@@ -136,11 +156,23 @@ public class AIRoom : WindowServantSP
         superScrollView.clear();
         foreach (var bot in Bots)
         {
-            superScrollView.add(bot.name);
+            superScrollView.add(bot.Name);
         }
     }
 
     public override void show()
+    {
+        ApplyLegacyShow();
+        ScreenController.SynchronizeLegacyShown();
+    }
+
+    public override void hide()
+    {
+        ApplyLegacyHide();
+        ScreenController.SynchronizeLegacyHidden();
+    }
+
+    private void ApplyLegacyShow()
     {
         base.show();
         printFile();
@@ -148,50 +180,132 @@ public class AIRoom : WindowServantSP
         Program.charge();
     }
 
+    private void ApplyLegacyHide()
+    {
+        base.hide();
+    }
+
     #endregion
 
     PrecyOcg precy;
 
-    public void launch(string command, bool lockhand, bool nocheck, bool noshuffle)
+    public void launch(bool lockhand, bool nocheck, bool noshuffle)
     {
-        killServerProcess();
-        command = command.Replace("'", "\"");
-        if (lockhand) command += " Hand=1";
-
-        if (Application.platform != RuntimePlatform.WindowsEditor &&
-            Application.platform != RuntimePlatform.WindowsPlayer)
+        AiFlowLaunchResult result = ScreenController.TryLaunch(new AiFlowLaunchRequest
         {
-            RMSshow_none("当前平台不支持人机对战。");
-            return;
+            IsRoomVisible = isShowed,
+            SelectedIndex = superScrollView != null ? superScrollView.selectedIndex : -1,
+            Bots = Bots,
+            LockHand = lockhand,
+            NoCheck = nocheck,
+            NoShuffle = noshuffle,
+            Platform = Application.platform,
+            PlayerName = Config.Get("name", "一秒一咕机会")
+        }, new AiFlowLaunchActions
+        {
+            StopServer = killServerProcess,
+            StartProcess = StartProcess,
+            TrackProcess = delegate(AiRoomProcessHandle process)
+            {
+                if (process == null || process.NativeProcess == null)
+                {
+                    return;
+                }
+
+                System.Diagnostics.Process nativeProcess = process.NativeProcess as System.Diagnostics.Process;
+                if (nativeProcess == null)
+                {
+                    return;
+                }
+
+                if (process.Id == "server")
+                {
+                    serverProcess = nativeProcess;
+                }
+                else if (process.Id == "bot")
+                {
+                    botProcess = nativeProcess;
+                }
+
+                ChildProcessTracker.AddProcess(nativeProcess);
+            },
+            ShowMessage = RMSshow_none,
+            SetDuelReturnTarget = delegate
+            {
+                Program.I().ocgcore.returnServant = Program.I().aiRoom;
+            },
+            RunAsync = delegate(Action action)
+            {
+                new Thread(delegate()
+                {
+                    if (action != null)
+                    {
+                        action();
+                    }
+                }).Start();
+            },
+            Delay = delegate(int milliseconds)
+            {
+                Thread.Sleep(milliseconds);
+            },
+            JoinAiRoom = delegate(AiFlowJoinRequest request)
+            {
+                TcpHelper.join(request.Host, request.PlayerName, request.Port, request.Password, request.Version);
+            },
+            StartLocalServer = delegate
+            {
+                _localServer = new AiLocalServer();
+                _localServer.Start();
+                return _localServer;
+            },
+            StopLocalServer = delegate
+            {
+                _localServer?.Stop();
+                _localServer = null;
+            },
+            StartBot = delegate(WindBotRunner runner)
+            {
+                _botRunner = runner;
+                _botRunner.Start();
+            }
+        });
+
+        if (!result.Started)
+        {
+            botProcess = null;
         }
+    }
 
-        serverProcess = new System.Diagnostics.Process();
-        serverProcess.StartInfo.UseShellExecute = false;
-        serverProcess.StartInfo.FileName = "AI.Server.exe";
-        serverProcess.StartInfo.Arguments = "7911 -1 5 0 F " + (nocheck ? "T" : "F") + " " + (noshuffle ? "T" : "F") + " 8000 5 1 0 0";
-        serverProcess.StartInfo.CreateNoWindow = true;
-        serverProcess.StartInfo.RedirectStandardOutput = true;
-        serverProcess.Start();
-        string port = serverProcess.StandardOutput.ReadLine();
-        command += " Port=" + port;
+    private static AiRoomProcessHandle StartProcess(AiRoomProcessStartRequest request)
+    {
+        System.Diagnostics.Process process = new System.Diagnostics.Process();
+        process.StartInfo.UseShellExecute = request.UseShellExecute;
+        process.StartInfo.FileName = request.FileName;
+        process.StartInfo.Arguments = request.Arguments;
+        process.StartInfo.WorkingDirectory = request.WorkingDirectory;
+        process.StartInfo.CreateNoWindow = request.CreateNoWindow;
+        process.StartInfo.RedirectStandardOutput = request.RedirectStandardOutput;
+        process.Start();
 
-        botProcess = new System.Diagnostics.Process();
-        botProcess.StartInfo.UseShellExecute = false;
-        botProcess.StartInfo.FileName = "WindBot/WindBot.exe";
-        botProcess.StartInfo.WorkingDirectory = "WindBot";
-        botProcess.StartInfo.Arguments = command;
-        botProcess.StartInfo.CreateNoWindow = true;
-        botProcess.StartInfo.RedirectStandardOutput = true;
-        botProcess.Start();
-        botProcess.StandardOutput.ReadLine();
+        return new AiRoomProcessHandle
+        {
+            Id = InferProcessId(request.FileName),
+            NativeProcess = process,
+            Kill = delegate
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                }
+            },
+            HasExited = delegate { return process.HasExited; },
+            ReadOutputLine = delegate { return process.StandardOutput.ReadLine(); }
+        };
+    }
 
-        ChildProcessTracker.AddProcess(serverProcess);
-        ChildProcessTracker.AddProcess(botProcess);
-
-        string name = Config.Get("name", "一秒一咕机会");
-        Program.I().ocgcore.returnServant = Program.I().aiRoom;
-        (new Thread(() => { Thread.Sleep(500); TcpHelper.join("127.0.0.1", name, port, "", ""); })).Start();
-        RMSshow_none(InterString.Get("您在AI模式下遇到的BUG也极有可能会在联机的时候出现，所以请务必向我们报告。"));
+    private static string InferProcessId(string fileName)
+    {
+        return string.Equals(fileName, "AI.Server.exe", StringComparison.Ordinal) ? "server" : "bot";
     }
 
     public override void preFrameFunction()
