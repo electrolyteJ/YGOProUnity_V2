@@ -3,14 +3,16 @@
   "rootNamespace": "",
   "references": [
     "App.Core",
+    "App.Platform",
+    "NGUI",
     "App.Features.Menu",
-    "App.Features.Online",
     "App.Features.Deck",
     "App.Features.Replay",
     "App.Features.Room",
     "App.Features.Duel",
     "App.Features.Puzzle",
-    "App.Features.AI"
+    "App.Features.AI",
+    "App.Features.Online"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
