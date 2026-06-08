@@ -1,7 +1,8 @@
 using System;
+using System.IO;
 using App.Core;
-using App.Features.AI.Services;
-using App.Features.Room.Services;
+using App.Screens.AI.Services;
+using App.Screens.Room.Services;
 using App.UI.Common;
 using App.UI.Common.Navigation;
 using App.UI.Screens.Room;
@@ -17,11 +18,13 @@ public static class Task5RoomBatchTest
         try
         {
             VerifyRoomFlowActions();
+            VerifyRoomFlowServiceIsAppOwned();
             VerifyAiEntryActions();
             VerifyAiRoomLaunchService();
             VerifyAiFlowService();
             VerifyRoomControllerRebindSynchronization();
             VerifyRoomControllerCloseBehavior();
+            VerifyRoomContentDirectoryStructure();
             Debug.Log("Task5RoomBatchTest OK");
         }
         catch (Exception exception)
@@ -319,58 +322,57 @@ public static class Task5RoomBatchTest
             throw new Exception("AiRoomLaunchService should keep the original command when Random=FLAG finds no matches.");
         }
 
-        AiRoomLaunchPreparation unsupported = service.PrepareLaunch(
+        AiRoomLaunchPreparation osxPreparation = service.PrepareLaunch(
             new AiRoomLaunchRequest
             {
-                Command = "Deck='Alpha'",
+                Command = "Name=BotAlpha Deck=Alpha DeckFile=Decks/Alpha.ydk Dialog=alpha Hand=2",
                 LockHand = true,
                 NoCheck = true,
                 NoShuffle = false,
                 Platform = RuntimePlatform.OSXPlayer
             });
-        if (unsupported.IsPlatformSupported)
+        if (!osxPreparation.IsPlatformSupported)
         {
-            throw new Exception("AiRoomLaunchService should reject non-Windows AI launch platforms.");
+            throw new Exception("AiRoomLaunchService should allow in-process AI launch preparation on non-Windows platforms.");
         }
 
-        AiRoomLaunchPreparation preparation = service.PrepareLaunch(
-            new AiRoomLaunchRequest
-            {
-                Command = "Deck='Alpha'",
-                LockHand = true,
-                NoCheck = true,
-                NoShuffle = false,
-                Platform = RuntimePlatform.WindowsPlayer
-            });
-        if (!preparation.IsPlatformSupported)
-        {
-            throw new Exception("AiRoomLaunchService should allow Windows AI launch platforms.");
-        }
-
-        if (preparation.PreparedCommand != "Deck=\"Alpha\" Hand=1")
+        if (osxPreparation.PreparedCommand != "Name=BotAlpha Deck=Alpha DeckFile=Decks/Alpha.ydk Dialog=alpha Hand=2 Hand=1")
         {
             throw new Exception("AiRoomLaunchService did not preserve command quote normalization and Hand=1 composition.");
         }
 
-        // if (preparation.ServerFileName != "AI.Server.exe"
-        //     || preparation.ServerArguments != "7911 -1 5 0 F T F 8000 5 1 0 0"
-        //     || preparation.BotFileName != "WindBot/WindBot.exe"
-        //     || preparation.BotWorkingDirectory != "WindBot")
-        // {
-        //     throw new Exception("AiRoomLaunchService did not preserve AI server and bot process launch metadata.");
-        // }
+        if (osxPreparation.BotName != "BotAlpha"
+            || osxPreparation.BotDeck != "Alpha"
+            || osxPreparation.BotDeckFile != "Decks/Alpha.ydk"
+            || osxPreparation.BotDialog != "alpha"
+            || osxPreparation.BotHand != 1
+            || !osxPreparation.NoCheck
+            || osxPreparation.NoShuffle
+            || !osxPreparation.LockHand)
+        {
+            throw new Exception("AiRoomLaunchService did not preserve parsed in-process bot launch metadata.");
+        }
 
-        // if (service.ComposeBotArguments(preparation.PreparedCommand, "7777") != "Deck=\"Alpha\" Hand=1 Port=7777")
-        // {
-        //     throw new Exception("AiRoomLaunchService did not preserve Port wiring in bot launch arguments.");
-        // }
+        AiRoomLaunchPreparation windowsPreparation = service.PrepareLaunch(
+            new AiRoomLaunchRequest
+            {
+                Command = "Deck='Alpha'",
+                LockHand = false,
+                NoCheck = false,
+                NoShuffle = false,
+                Platform = RuntimePlatform.WindowsPlayer
+            });
+        if (!windowsPreparation.IsPlatformSupported)
+        {
+            throw new Exception("AiRoomLaunchService should continue allowing Windows AI launch preparation.");
+        }
     }
 
     private static void VerifyAiFlowService()
     {
         VerifyAiFlowServiceIgnoresInvalidSelection();
-        VerifyAiFlowServiceHandlesUnsupportedPlatforms();
-        VerifyAiFlowServiceLaunchesProcessesAndSchedulesJoin();
+        VerifyAiFlowServiceLaunchesInProcessAndSchedulesJoin();
+        VerifyAiFlowServiceLaunchesExternalProcessesAndSchedulesJoin();
         VerifyAiFlowServiceCloseBehavior();
     }
 
@@ -420,50 +422,120 @@ public static class Task5RoomBatchTest
         }
     }
 
-    private static void VerifyAiFlowServiceHandlesUnsupportedPlatforms()
+    private static void VerifyAiFlowServiceLaunchesInProcessAndSchedulesJoin()
     {
         AiFlowService service = new AiFlowService(new AiRoomLaunchService());
         RecordingAiFlowActions actions = new RecordingAiFlowActions();
+        actions.StartLocalServerFactory = delegate
+        {
+            AiLocalServer server = new AiLocalServer();
+            server.Start();
+            return server;
+        };
 
-        AiFlowLaunchResult result = service.TryLaunch(
-            new AiFlowLaunchRequest
-            {
-                IsRoomVisible = true,
-                SelectedIndex = 0,
-                Bots = new[]
+        AiFlowLaunchResult result = null;
+        try
+        {
+            result = service.TryLaunch(
+                new AiFlowLaunchRequest
                 {
-                    CreateBot("Alpha", "Deck='Alpha'", "Alpha bot", "CONTROL")
+                    IsRoomVisible = true,
+                    SelectedIndex = 0,
+                    Bots = new[]
+                    {
+                        CreateBot("Alpha", "Name=FireBot Deck=Fire DeckFile=Decks/Fire.ydk Dialog=fire Hand=2", "Alpha bot", "CONTROL")
+                    },
+                    LockHand = true,
+                    NoCheck = false,
+                    NoShuffle = false,
+                    Platform = RuntimePlatform.OSXPlayer,
+                    PlayerName = "FlowTester",
+                    PlayerDeckPath = "/task5-ai/deck/player.ydk",
+                    CardDatabasePath = "/task5-ai/cards.cdb"
                 },
-                LockHand = true,
-                NoCheck = false,
-                NoShuffle = false,
-                Platform = RuntimePlatform.OSXPlayer,
-                PlayerName = "Tester"
-            },
-            actions.CreateLaunchActions());
+                actions.CreateLaunchActions());
 
-        if (result.Started)
-        {
-            throw new Exception("AiFlowService should not report a started AI launch on unsupported platforms.");
+            if (!result.Started || result.ServerInstance == null || result.BotRunner == null)
+            {
+                throw new Exception("AiFlowService should prefer the in-process AI launch path when a local server hook is provided.");
+            }
+
+            if (result.ServerProcess != null || result.BotProcess != null)
+            {
+                throw new Exception("AiFlowService should not report external process handles when the in-process AI path is used.");
+            }
+
+            if (actions.StopServerCount != 1)
+            {
+                throw new Exception("AiFlowService should stop the previous AI server before starting a new in-process AI session.");
+            }
+
+            if (actions.StartedLocalServers.Count != 1 || actions.StartedLocalServers[0] != result.ServerInstance)
+            {
+                throw new Exception("AiFlowService should obtain the in-process local server instance through the injected launch action.");
+            }
+
+            if (actions.StartedBots.Count != 1 || actions.StartedBots[0] != result.BotRunner)
+            {
+                throw new Exception("AiFlowService should pass the constructed WindBot runner through the injected launch action.");
+            }
+
+            string expectedBotDeckPath = Path.Combine(Application.streamingAssetsPath, "WindBot", "Decks/Fire.ydk");
+            if (result.ServerInstance.PlayerName != "FlowTester"
+                || result.ServerInstance.BotName != "FireBot"
+                || result.ServerInstance.PlayerDeckPath != "/task5-ai/deck/player.ydk"
+                || result.ServerInstance.BotDeckPath != expectedBotDeckPath)
+            {
+                throw new Exception("AiFlowService did not preserve in-process local server session metadata.");
+            }
+
+            if (result.BotRunner.Name != "FireBot"
+                || result.BotRunner.Deck != "Fire"
+                || result.BotRunner.DeckFile != expectedBotDeckPath
+                || result.BotRunner.Dialog != "fire"
+                || result.BotRunner.Hand != 1)
+            {
+                throw new Exception("AiFlowService did not preserve WindBot runner metadata for the in-process launch path.");
+            }
+
+            if (actions.StartedProcesses.Count != 0 || actions.TrackedProcesses.Count != 0)
+            {
+                throw new Exception("AiFlowService should not start or track external child processes when the in-process path is selected.");
+            }
+
+            if (actions.SetReturnTargetCount != 1)
+            {
+                throw new Exception("AiFlowService should set the duel return target through the injected AI room entry actions.");
+            }
+
+            if (actions.RunAsyncCount != 1 || actions.Delays.Count != 1 || actions.Delays[0] != 500)
+            {
+                throw new Exception("AiFlowService should preserve the delayed AI join timing for the in-process path.");
+            }
+
+            if (actions.JoinRequests.Count != 1
+                || actions.JoinRequests[0].Host != "127.0.0.1"
+                || actions.JoinRequests[0].PlayerName != "FlowTester"
+                || actions.JoinRequests[0].Port != result.ServerInstance.Port.ToString()
+                || actions.JoinRequests[0].Password != string.Empty
+                || actions.JoinRequests[0].Version != string.Empty)
+            {
+                throw new Exception("AiFlowService should preserve the TCP join request that enters the in-process AI room.");
+            }
+
+            if (actions.Messages.Count != 1 || actions.Messages[0] != InterString.Get("您在AI模式下遇到的BUG也极有可能会在联机的时候出现，所以请务必向我们报告。"))
+            {
+                throw new Exception("AiFlowService should surface the existing AI mode caution message after an in-process launch.");
+            }
         }
-
-        if (actions.StopServerCount != 1)
+        finally
         {
-            throw new Exception("AiFlowService should stop the previous AI server before evaluating the new launch.");
-        }
-
-        if (actions.StartedProcesses.Count != 0)
-        {
-            throw new Exception("AiFlowService should not start child processes on unsupported platforms.");
-        }
-
-        if (actions.Messages.Count != 1 || actions.Messages[0] != "当前平台不支持人机对战。")
-        {
-            throw new Exception("AiFlowService should surface the unsupported platform message through injected callbacks.");
+            result?.BotRunner?.Stop();
+            result?.ServerInstance?.Stop();
         }
     }
 
-    private static void VerifyAiFlowServiceLaunchesProcessesAndSchedulesJoin()
+    private static void VerifyAiFlowServiceLaunchesExternalProcessesAndSchedulesJoin()
     {
         AiFlowService service = new AiFlowService(new AiRoomLaunchService());
         RecordingAiFlowActions actions = new RecordingAiFlowActions();
@@ -500,12 +572,17 @@ public static class Task5RoomBatchTest
 
         if (!result.Started || result.ServerProcess == null || result.BotProcess == null)
         {
-            throw new Exception("AiFlowService should return the launched child process handles after a successful AI start.");
+            throw new Exception("AiFlowService should return the launched child process handles after a successful compatibility-mode AI start.");
+        }
+
+        if (result.ServerInstance != null || result.BotRunner != null)
+        {
+            throw new Exception("AiFlowService should not report in-process launch instances when it falls back to external processes.");
         }
 
         if (actions.StopServerCount != 1)
         {
-            throw new Exception("AiFlowService should stop the prior server before starting a new AI session.");
+            throw new Exception("AiFlowService should stop the prior server before starting a new compatibility-mode AI session.");
         }
 
         if (actions.StartedProcesses.Count != 2)
@@ -598,62 +675,6 @@ public static class Task5RoomBatchTest
         };
     }
 
-    private sealed class TestPaths : IPlatformPaths
-    {
-        private readonly string projectRoot;
-
-        public TestPaths(string projectRoot)
-        {
-            this.projectRoot = projectRoot;
-        }
-
-        public string ProjectRoot
-        {
-            get { return projectRoot; }
-        }
-
-        public string GetDirectoryPath(string directoryName)
-        {
-            return Combine(projectRoot, directoryName);
-        }
-
-        public string GetProjectRootFilePath(params string[] segments)
-        {
-            string path = projectRoot;
-            for (int index = 0; index < segments.Length; index++)
-            {
-                path = Combine(path, segments[index]);
-            }
-
-            return path;
-        }
-
-        public string GetFilePath(string directoryName, params string[] segments)
-        {
-            string path = GetDirectoryPath(directoryName);
-            for (int index = 0; index < segments.Length; index++)
-            {
-                path = Combine(path, segments[index]);
-            }
-
-            return path;
-        }
-
-        private static string Combine(string left, string right)
-        {
-            if (string.IsNullOrEmpty(left))
-            {
-                return right ?? string.Empty;
-            }
-
-            if (string.IsNullOrEmpty(right))
-            {
-                return left;
-            }
-
-            return left.TrimEnd('/') + "/" + right.TrimStart('/');
-        }
-    }
 
     private sealed class RecordingRoomActions
     {
@@ -691,9 +712,12 @@ public static class Task5RoomBatchTest
 
         public readonly System.Collections.Generic.List<AiRoomProcessStartRequest> StartedProcesses = new System.Collections.Generic.List<AiRoomProcessStartRequest>();
         public readonly System.Collections.Generic.List<AiRoomProcessHandle> TrackedProcesses = new System.Collections.Generic.List<AiRoomProcessHandle>();
+        public readonly System.Collections.Generic.List<AiLocalServer> StartedLocalServers = new System.Collections.Generic.List<AiLocalServer>();
+        public readonly System.Collections.Generic.List<WindBotRunner> StartedBots = new System.Collections.Generic.List<WindBotRunner>();
         public readonly System.Collections.Generic.List<string> Messages = new System.Collections.Generic.List<string>();
         public readonly System.Collections.Generic.List<int> Delays = new System.Collections.Generic.List<int>();
         public readonly System.Collections.Generic.List<AiFlowJoinRequest> JoinRequests = new System.Collections.Generic.List<AiFlowJoinRequest>();
+        public Func<AiLocalServer> StartLocalServerFactory;
         public int StopServerCount;
         public int SetReturnTargetCount;
         public int RunAsyncCount;
@@ -720,7 +744,7 @@ public static class Task5RoomBatchTest
 
         public AiFlowLaunchActions CreateLaunchActions()
         {
-            return new AiFlowLaunchActions
+            AiFlowLaunchActions actions = new AiFlowLaunchActions
             {
                 StopServer = delegate { StopServerCount++; },
                 StartProcess = delegate(AiRoomProcessStartRequest request)
@@ -731,6 +755,7 @@ public static class Task5RoomBatchTest
                 TrackProcess = delegate(AiRoomProcessHandle process) { TrackedProcesses.Add(process); },
                 ShowMessage = delegate(string message) { Messages.Add(message); },
                 SetDuelReturnTarget = delegate { SetReturnTargetCount++; },
+                StartBot = delegate(WindBotRunner runner) { StartedBots.Add(runner); },
                 RunAsync = delegate(Action action)
                 {
                     RunAsyncCount++;
@@ -742,6 +767,18 @@ public static class Task5RoomBatchTest
                 Delay = delegate(int milliseconds) { Delays.Add(milliseconds); },
                 JoinAiRoom = delegate(AiFlowJoinRequest request) { JoinRequests.Add(request); }
             };
+
+            if (StartLocalServerFactory != null)
+            {
+                actions.StartLocalServer = delegate
+                {
+                    AiLocalServer server = StartLocalServerFactory();
+                    StartedLocalServers.Add(server);
+                    return server;
+                };
+            }
+
+            return actions;
         }
     }
 
@@ -759,6 +796,75 @@ public static class Task5RoomBatchTest
                 ExitApplication = delegate { ExitCount++; },
                 ReturnToMenu = delegate { ReturnToMenuCount++; }
             };
+        }
+    }
+
+    private static void VerifyRoomFlowServiceIsAppOwned()
+    {
+        RoomFlowService service = new RoomFlowService(new TestPaths("/task5-app-owned"));
+
+        RecordingRoomActions actions = new RecordingRoomActions();
+
+        service.HandleReadyToggle(
+            new RoomSeatInteractionRequest
+            {
+                SelfType = 0,
+                SeatCount = 4,
+                IsPrepared = false,
+                SelectedDeckName = "test-deck"
+            },
+            actions.CreateInteractionActions());
+
+        if (actions.UpdatedDeckPath != "/task5-app-owned/deck/test-deck.ydk")
+        {
+            throw new Exception("RoomFlowService should own deck update flow through injected actions without direct TcpHelper access.");
+        }
+
+        if (actions.ReadyCount != 1)
+        {
+            throw new Exception("RoomFlowService should own ready toggle flow through injected actions without direct TcpHelper access.");
+        }
+
+        actions = new RecordingRoomActions();
+        service.StartDuel(actions.CreateInteractionActions());
+        if (actions.StartCount != 1)
+        {
+            throw new Exception("RoomFlowService should own duel start flow through injected actions without direct TcpHelper access.");
+        }
+
+        actions = new RecordingRoomActions();
+        service.MoveToDuelist(actions.CreateInteractionActions());
+        service.MoveToObserver(actions.CreateInteractionActions());
+        if (actions.MoveToDuelistCount != 1 || actions.MoveToObserverCount != 1)
+        {
+            throw new Exception("RoomFlowService should own seat movement flow through injected actions without direct TcpHelper access.");
+        }
+
+        actions = new RecordingRoomActions();
+        service.KickPlayer(2, actions.CreateInteractionActions());
+        if (actions.KickedSeat != 2)
+        {
+            throw new Exception("RoomFlowService should own player kick flow through injected actions without direct TcpHelper access.");
+        }
+    }
+
+    private static void VerifyRoomContentDirectoryStructure()
+    {
+        string uiRoomPath = "Assets/Content/UI/Room";
+        string backgroundsRoomPath = "Assets/Content/Backgrounds/Room";
+
+        bool uiRoomExists = Directory.Exists(uiRoomPath);
+        bool backgroundsRoomExists = Directory.Exists(backgroundsRoomPath);
+
+        if (!uiRoomExists || !backgroundsRoomExists)
+        {
+            throw new Exception("Room content directories must exist under Assets/Content for app-owned ownership.");
+        }
+
+        string[] uiPrefabs = Directory.GetFiles(uiRoomPath, "*.prefab");
+        if (uiPrefabs.Length == 0)
+        {
+            throw new Exception("Room UI prefabs must be present in Assets/Content/UI/Room for content-authoritative ownership.");
         }
     }
 

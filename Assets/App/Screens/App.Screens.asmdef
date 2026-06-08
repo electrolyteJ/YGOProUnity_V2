@@ -1,9 +1,11 @@
 {
-  "name": "App.UI",
+  "name": "App.Screens",
   "rootNamespace": "",
   "references": [
     "App.Core",
-    "NGUI"
+    "NGUI",
+    "App.UI",
+    "YGOSharp.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

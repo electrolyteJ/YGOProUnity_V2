@@ -1,11 +1,16 @@
 {
-  "name": "App.UI",
+  "name": "App.Editor",
   "rootNamespace": "",
   "references": [
     "App.Core",
-    "NGUI"
+    "App.UI",
+    "App.Screens",
+    "NGUI",
+    "YGOSharp.Core"
   ],
-  "includePlatforms": [],
+  "includePlatforms": [
+    "Editor"
+  ],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,

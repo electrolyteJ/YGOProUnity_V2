@@ -1,9 +1,9 @@
 {
-  "name": "App.UI",
+  "name": "NGUI",
   "rootNamespace": "",
   "references": [
-    "App.Core",
-    "NGUI"
+    "UnityEngine.UI",
+    "App.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
